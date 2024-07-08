@@ -55,7 +55,7 @@ class CommandProcessor
         return $this->_availableCommands;
     }
 
-    public function process($input)
+    public function handle($input)
     {
         $this->addToLog($input, 'input');
         if (empty($input)) {
@@ -95,6 +95,8 @@ class CommandProcessor
         if ($this->_storage->currentCmd) {
 
             $command = $this->convertToCommand($this->_storage->currentCmd);
+
+
             $newCommand = $this->_parser->parse($input);
 
             if ($newCommand->verb == 'cancel') {
@@ -259,6 +261,16 @@ class CommandProcessor
         }
 
         return $availableCommands;
+    }
+
+    public function lastCommand()
+    {
+        return $this->_storage->currentCmd ?? null;
+    }
+
+    public function lastResource()
+    {
+        return $this->_storage->lastResource ?? null;
     }
 
     public function suggestCommands($input, &$cmd)
