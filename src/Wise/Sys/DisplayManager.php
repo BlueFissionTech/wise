@@ -1,6 +1,6 @@
 <?php
 
-namespace BlueFission\Wise\Sys\DisplayManager;
+namespace BlueFission\Wise\Sys;
 
 use BlueFission\Wise\Sys\Drivers\IDisplayDriver;
 

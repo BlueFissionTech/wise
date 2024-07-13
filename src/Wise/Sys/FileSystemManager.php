@@ -1,6 +1,6 @@
 <?php
 
-namespace BlueFission\Wise\Kernel;
+namespace BlueFission\Wise\Sys;
 
 use BlueFission\Data\FileSystem;
 

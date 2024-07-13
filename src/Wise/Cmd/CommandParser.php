@@ -1,6 +1,8 @@
 <?php
 namespace BlueFission\Wise\Cmd;
 
+use BlueFission\Services\Application as App;
+
 // CommandParser.php
 class CommandParser
 {
@@ -78,7 +80,7 @@ class CommandParser
 
     public function __construct()
     {
-        $this->app = \App::instance();
+        $this->app = App::instance();
 
         // Register default resource handlers
         $this->registerResourceHandler('phone', '/^\+?\d{1,4}[\s-]?\d{1,4}(?:[\s-]?\d{1,4}){1,4}$/', null);

@@ -17,6 +17,7 @@ class CommandProcessor
     protected $_storage;
     protected $_grammar;
     protected $_llmClient;
+    protected $_name;
 
     protected $_availableCommands = [];
 
@@ -27,7 +28,7 @@ class CommandProcessor
 
     protected $_keywords = [];
 
-    public function __construct(Storage $storage, IClient $llmClient)
+    public function __construct(Storage $storage, IClient $llmClient = null)
     {
         $this->setKeywords();
         $this->_parser = new CommandParser();
@@ -36,6 +37,8 @@ class CommandProcessor
         $this->_storage->activate();
 
         $this->_llmClient = $llmClient;
+
+        $this->_name = $this->_app->name();
 
         $this->_grammar = $this->_app->getDynamicInstance(Grammar::class);
 
@@ -465,6 +468,10 @@ class CommandProcessor
 
     private function conversationalResponse( $input )
     {
+        if ( ! $this->_llmClient ) {
+            return $input;
+        }
+
         $log = $this->_storage->log ?? [];
         $history = "";
         foreach ($log as $line) {
@@ -510,7 +517,7 @@ class CommandProcessor
         ],
         'identity' => [
             'keywords' => ['who am i', 'what is my name'],
-            'responses' => ['You are '.env('APP_NAME').', the user of this command prompt interpreter.'],
+            'responses' => ['You are '. $this->_name .', the user of this command prompt interpreter.'],
         ],
         'who_are_you' => [
             'keywords' => ['who are you', 'your name', 'what is your name', 'identify yourself'],
@@ -529,8 +536,12 @@ class CommandProcessor
                 $numCores = (int)shell_exec("wmic cpu get NumberOfCores /Value | findstr /R /C:\"^NumberOfCores=[0-9]*\" | findstr /R /C:\"[0-9]*\"");
             }
 
+            if ( ! function_exists('sys_getloadavg') ) {
+                return 'I\'m not sure how I\'m feeling right now. I cannot retrieve system load information.';
+            }
+
             // Get the load average
-            $load = sys_getloadavg();
+            $load = \sys_getloadavg();
 
             if ($numCores > 0 && is_array($load) && count($load) > 0) {
                 $loadPercentage = ($load[0] / $numCores) * 100;

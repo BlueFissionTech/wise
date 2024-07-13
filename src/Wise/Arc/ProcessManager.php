@@ -12,9 +12,10 @@ class ProcessManager {
     public function initialize() {
         // Initialize process management
         $this->_processes = new Arr();
-        $this->_memoryManager = new MemoryManager();
-        
-        $this->_memoryManager->initialize();
+    }
+
+    public function setMemoryManager(MemoryManager $memoryManager) {
+        $this->_memoryManager = $memoryManager;
     }
 
     public function createProcess($command, $input = null) {

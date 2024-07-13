@@ -11,16 +11,19 @@ class MemoryManager {
     protected $_interval;
     protected $_async;
 
-    public function __construct($threshold = 300, $interval = 60, $async) {
+    public function __construct($threshold = 300, $interval = 60) {
         $this->_threshold = $threshold;
         $this->_interval = $interval;
-        $this->_async = $async;
         Mem::threshold($threshold);
     }
 
     public function initialize() {
         // Start async task to monitor memory
-        $this->_async->do([$this, 'monitorMemory'])->then(function() {
+        if ( ! $this->_async ) {
+            throw new \Exception("Async handler not set.");
+        }
+
+        $this->_async::do([$this, 'monitorMemory'])->then(function() {
             $this->initialize();
         });
     }
@@ -53,6 +56,10 @@ class MemoryManager {
 
     public function sleepAll() {
         Mem::sleepAll();
+    }
+
+    public function setAsyncHandler($async) {
+        $this->_async = $async;
     }
 
     protected function sleepIdleProcesses() {
