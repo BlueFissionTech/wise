@@ -1,1 +1,150 @@
-/vendor
+# General
+.DS_Store
+Thumbs.db
+
+# Composer dependencies
+/vendor/
+
+/composer.lock
+
+# PHPStorm project files
+.idea/
+
+# Node dependencies (if applicable)
+/node_modules/
+
+/npm-debug.log
+/yarn-error.log
+
+# Python virtual environments
+/venv/
+/env/
+/.venv/
+/.pyenv/
+/pipenv/
+/__pycache__/
+/*.pyc
+/*.pyo
+/*.pyd
+
+# Python egg files
+*.egg
+*.egg-info
+dist/
+build/
+.eggs/
+
+# Python testing output
+.coverage
+.tox/
+.nox/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# PyInstaller
+# Usually these files are written by a python script from a template
+# before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# C extensions
+*.so
+
+# Test, Coverage, and reports
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Environment Variables
+.env
+.env.*
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# macOS specific
+*.DS_Store
+
+# Linux specific
+*~
+
+# Windows specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# PyCharm specific
+.idea/
+*.iml
+*.iws
+*.ipr
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# VSCode specific
+.vscode/
+
+# Python wheels
+*.whl
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Sphinx documentation
+docs/_build/
+
+# pyenv
+.python-version
+
+# celery beat schedule file
+celerybeat-schedule
+
+# dotenv
+.env
+.env.*
+
+# virtualenv
+/venv/
+ENV/
+env.bak/
+env/
+
+# pytest
+.cache/
+
+# MySQL Workbench
+*.mwb
+
+# Coveralls reports
+.coverage
+*.cover
+.hypothesis/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# Custom Scripts
+/scripts/*.pyc
+/scripts/*.pyo
+/scripts/*.pyd
+
+# Logs and temp files
+logs
+*.log
+*.temp
+
+# Ignore the script output files
+/speech.mp3
+/speech.wav

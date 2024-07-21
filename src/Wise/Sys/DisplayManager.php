@@ -3,6 +3,7 @@
 namespace BlueFission\Wise\Sys;
 
 use BlueFission\Wise\Sys\Drivers\IDisplayDriver;
+use BlueFission\Arr;
 
 class DisplayManager {
 
@@ -14,9 +15,41 @@ class DisplayManager {
 
 	public function initialize() {
 		// Initialize the display
+		$this->_driver->init();
 	}
 
-	public function send( $data ) {
-		$this->_driver->handle( $data );
+	public function update() {
+		$this->_driver->update();
+	}
+
+	public function send( $data, $args = [] ) {
+		$arg1 = null;
+		$arg2 = null;
+
+		if (Arr::isAssoc($args) && Arr::size($args) > 0) {
+			$args = Arr::use();
+			$arg1 = $args->keys()->get(0);
+			$arg2 = $args->get($arg1);
+		} elseif (Arr::isIndexed($args) && Arr::size($args) > 0) {
+			$args = Arr::use();
+			$arg1 = $args->next();
+			$arg2 = $args->next();
+		} else {
+			$arg1 = $args;
+		}
+
+		$this->_driver->handle( $data, $arg1, $arg2 );
+	}
+
+	public function draw() {
+		$this->_driver->draw();
+	}
+
+	public function clear() {
+		$this->_driver->clear();
+	}
+
+	public function clearScreen() {
+		$this->_driver->clearScreen();
 	}
 }

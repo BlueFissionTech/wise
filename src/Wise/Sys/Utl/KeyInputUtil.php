@@ -12,9 +12,13 @@ class KeyInputUtil {
 	public static function init(Stdio $stdio) {
 		self::$_stdio = $stdio;
 
-		self::$_stdio->when(Event::RECEIVED, function($b, $m) {
-
+		self::$_stdio->when(new Event(Event::RECEIVED), function($b, $meta) {
+		    
 		});
+
+		// self::$_stdio->when(new Event(Event::ERROR), function($b, $meta) {
+		//     echo "Error: ";
+		// });
 	}
 
 	public static function listen() {

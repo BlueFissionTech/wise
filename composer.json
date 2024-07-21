@@ -50,5 +50,13 @@
         "psr-4": { 
             "BlueFission\\Tests\\": "tests/" 
         }
+    },
+    "scripts": {
+        "post-install-cmd": [
+            "BlueFission\\Wise\\Installer::postInstall"
+        ],
+        "post-update-cmd": [
+            "BlueFission\\Wise\\Installer::postUpdate"
+        ]
     }
 }
