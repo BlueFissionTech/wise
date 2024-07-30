@@ -14,5 +14,4 @@ class KeyInputManager {
 		// Listen for key input
 		return KeyInputUtil::listen();
 	}
-
 }

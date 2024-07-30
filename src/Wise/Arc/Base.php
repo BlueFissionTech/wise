@@ -53,7 +53,7 @@ class Base {
 
         $this->display(PHP_EOL . PHP_EOL);
 
-        $this->display("Running WISE shell version 0.0.1, produced by ");
+        $this->display("Running WISE version 0.0.1, produced by ");
         $this->display("Blue Fission", ['color'=>'cyan']);
         $this->display("." . PHP_EOL);
 

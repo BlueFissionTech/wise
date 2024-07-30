@@ -15,19 +15,22 @@ use BlueFission\IObj;
 
 class ExtendedStdio extends Stdio
 {
-    private $_process;
+    private $_pollProcess;
     private $_pollingScript;
+    private $_stdinProcess;
+    private $_stdinScript;
 
     /**
      * Constructor that sets the configuration data.
      *
      * @param array|null $config Configuration data.
      */
-    public function __construct(string $pollingScript = null, $config = null)
+    public function __construct(string $stdinScript = null, string $pollingScript = null, $config = null)
     {
         parent::__construct($config);
-        $this->initProcess();
         $this->_pollingScript = $pollingScript;
+        $this->_stdinScript = $stdinScript;
+        $this->initProcess();
     }
 
     /**
@@ -35,30 +38,42 @@ class ExtendedStdio extends Stdio
      */
     private function initProcess()
     {
-        if ( $this->_pollingScript ) {
+        if ( !$this->_pollingScript ) {
             $this->_pollingScript = 'php';
         }
      
-        $this->_process = new Process($this->_pollingScript, null, null, [
+        $this->_pollProcess = new Process($this->_pollingScript, null, null, [
             0 => ["pipe", "r"],  // stdin
             1 => ["pipe", "w"],  // stdout
             2 => ["pipe", "a"],  // stderr
         ]);
 
-        $this->_process->start();
+        $this->_pollProcess->start();
 
-        stream_set_blocking($this->_process->pipes(1), false);
-        stream_set_blocking($this->_process->pipes(2), false);
+        stream_set_blocking($this->_pollProcess->pipes(1), false);
+        stream_set_blocking($this->_pollProcess->pipes(2), false);
 
-        stream_set_blocking(STDIN, false);
-        
-        // if linux
         if ( PHP_OS == 'Linux' ) {
             system('stty cbreak');
             system('stty -icanon');
         } elseif ( PHP_OS == 'WINNT' ) {
-            // system('mode con:cols=80 lines=25');
+            // Allow for non-blocking input on Windows
+            if (! $this->_stdinScript ) {
+                $this->_stdinScript = 'php';
+            }
+
+            $this->_stdinProcess = new Process($this->_stdinScript, null, null, [
+                0 => ["pipe", "r"],  // stdin
+                1 => ["pipe", "w"],  // stdout
+                2 => ["pipe", "a"],  // stderr
+            ]);
+
+            $this->_stdinProcess->start();
+
+            stream_set_blocking($this->_stdinProcess->pipes(1), false);
         }
+
+        stream_set_blocking(STDIN, false);
     }
 
     /**
@@ -68,7 +83,9 @@ class ExtendedStdio extends Stdio
      */
     protected function listen()
     {
-        $readStreams = [$this->_connection['in'], $this->_process->pipes(1)];
+        $stdin = (PHP_OS == 'WINNT') ? $this->_stdinProcess->pipes(1) : $this->_connection['in'];
+
+        $readStreams = [$stdin, $this->_pollProcess->pipes(1)];
         $writeStreams = null;
         $exceptStreams = null;
         $timeout = 0; 
@@ -84,12 +101,12 @@ class ExtendedStdio extends Stdio
             $this->perform(Event::ERROR, new Meta(when: Action::PROCESS, info: $error));
         } elseif ($numChangedStreams > 0) {
             foreach ($readStreams as $stream) {
-                if ($stream === $this->_connection['in']) {
+                if ($stream === $stdin) {
                     // Handle standard input
                     $this->handleInput($stream);
-                } elseif ($stream === $this->_process->pipes(1)) {
+                } elseif ($stream === $this->_pollProcess->pipes(1)) {
                     // Handle process output
-                    $this->handleProcessOutput($stream);
+                    $this->handlePollingOutput($stream);
                 }
             }
         }
@@ -103,7 +120,19 @@ class ExtendedStdio extends Stdio
      */
     private function handleInput($stream)
     {
-        $data = fgets($stream);
+        // Check if the stream is valid
+        if (!is_resource($stream) || feof($stream)) {
+            $error = "Invalid or closed input stream";
+            error_log('IO Error: ' . $error);
+            $this->perform(Event::ERROR, new Meta(when: Action::PROCESS, info: $error));
+            return;
+        }
+
+        // $data = fgets($stream);
+        // $data = fread($stream, 1);
+        $data = stream_get_line($stream, 1);
+
+        // die($data);
 
         if ($data !== false) {
             $this->_result .= $data;
@@ -121,7 +150,7 @@ class ExtendedStdio extends Stdio
      * @param resource $stream The output stream.
      * @return void
      */
-    private function handleProcessOutput($stream)
+    private function handlePollingOutput($stream)
     {
         $data = fread($stream, 8192);
 

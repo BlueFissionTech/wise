@@ -4,6 +4,7 @@ namespace BlueFission\Wise\Usr;
 
 use BlueFission\Wise\Arc\Kernel;
 use BlueFission\Services\Authenticator;
+use BlueFission\Str;
 
 class Identity {
 	protected $_authenticator;
@@ -68,7 +69,7 @@ class Identity {
 	}
 
 	private function display($data) {
-		$this->_kernel->display($data);
+		$this->_kernel->send($data);
 	}
 
 	private function input() {
@@ -80,13 +81,33 @@ class Identity {
 	}
 
 	private function promptUsername() {
-		$this->display('# Input Username > ');
-		$this->_username = $this->input();
+		$this->display(PHP_EOL.'# Input Username > ');
+
+		while (Str::pos($this->_username, PHP_EOL) === false) {
+			// append to username while accounting for backspace
+			$this->_username .= $this->input();
+			
+			if ($this->input() === "\x7F") {
+				$this->_username = Str::use()->sub(0, -1);
+			}
+			
+			usleep(100000);
+		}
 	}
 
 	private function promptPassword() {
-		$this->display('# Input Password > ');
-		$this->_password = $this->inputSilent();
+		$this->display(PHP_EOL.'# Input Password > ');
+
+		while (Str::pos($this->_password, PHP_EOL) === false) {
+			// append to password while accounting for backspace
+			$this->_password .= $this->inputSilent();
+			
+			if ($this->input() === "\x7F") {
+				$this->_password = Str::use()->sub(0, -1);
+			}
+			
+			usleep(100000);
+		}
 	}
 
 	private function usernameIsValid() {

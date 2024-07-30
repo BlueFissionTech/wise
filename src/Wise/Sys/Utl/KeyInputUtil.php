@@ -11,14 +11,16 @@ class KeyInputUtil {
 
 	public static function init(Stdio $stdio) {
 		self::$_stdio = $stdio;
+	}
 
+	public static function passKernel($kernel) {
 		self::$_stdio->when(new Event(Event::RECEIVED), function($b, $meta) {
-		    
+			$kernel->listen($meta->data);
 		});
 
-		// self::$_stdio->when(new Event(Event::ERROR), function($b, $meta) {
-		//     echo "Error: ";
-		// });
+		self::$_stdio->when(new Event(Event::ERROR), function($b, $meta) {
+		    echo "Error: ";
+		});
 	}
 
 	public static function listen() {

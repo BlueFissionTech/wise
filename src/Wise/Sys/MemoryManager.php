@@ -23,7 +23,7 @@ class MemoryManager {
             throw new \Exception("Async handler not set.");
         }
 
-        $this->_async::do([$this, 'monitorMemory'])->then(function() {
+        $this->_async::do([$this, 'monitorMemory'])->then(function() {  
             $this->initialize();
         });
     }

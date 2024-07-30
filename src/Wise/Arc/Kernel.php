@@ -4,37 +4,48 @@ namespace BlueFission\Wise\Arc;
 
 use BlueFission\Wise\Sys\{
     MemoryManager,
-    FileSystemManager,
-    DisplayManager,
-    KeyInputManager
+    FileSystemManager
 };
 use BlueFission\Wise\Usr\Identity;
-use BlueFission\Wise\Cmd\CommandHandler;
-use BlueFission\Wise\Cmd\CommandProcessor;
+use BlueFission\Wise\Cmd\{CommandHandler, CommandProcessor};
+use BlueFission\Wise\Cli\Console;
 use BlueFission\Automata\Language\IInterpreter;
 use BlueFission\Async\Async;
 use BlueFission\Data\Storage\Storage;
 use BlueFission\Services\Application as App;
 use BlueFission\Services\Authenticator as Auth;
+use BlueFission\Collections\Collection;
+use BlueFission\Behavioral\Behaviors\Event;
+use BlueFission\IPC\IPC;
+use BlueFission\Str;
 
 class Kernel {
+    use Traits\ManagesFileSystem;
+    use Traits\ReceivesMessages;
+
     protected $_identity;
     protected $_processManager;
     protected $_commandProcessor;
     protected $_commandHandler;
     protected $_memoryManager;
     protected $_fileSystemManager;
-    protected $_displayManager;
-    protected $_keyInputManager;
     protected $_sessionStorage;
     protected $_dataStorage;
     protected $_interpreter;
-    protected $_async;
     protected $_base;
+    protected $_ipc;
+
+    protected $_console;
+
+    protected $_async;
+    protected $_queue;
+    protected $_output;
 
     protected static $_instance = null;
 
-    public function __construct(ProcessManager $processManager, CommandProcessor $commandProcessor, MemoryManager $memoryManager, FileSystemManager $fileSystemManager, IInterpreter $interpreter, DisplayManager $displayManager, KeyInputManager $keyInputManager, Storage $sessionStorage, Storage $dataStorage) {
+    const INPUT_CHANNEL = '__input__';
+
+    public function __construct(ProcessManager $processManager, CommandProcessor $commandProcessor, MemoryManager $memoryManager, FileSystemManager $fileSystemManager, IInterpreter $interpreter, Console $console, Storage $sessionStorage, Storage $dataStorage, IPC $ipc) {
         if (self::$_instance) {
             return self::$_instance;
         }
@@ -43,17 +54,18 @@ class Kernel {
         $this->_commandProcessor = $commandProcessor;
         $this->_memoryManager = $memoryManager;
         $this->_fileSystemManager = $fileSystemManager;
-        $this->_displayManager = $displayManager;
-        $this->_keyInputManager = $keyInputManager;
         $this->_interpreter = $interpreter;
+        $this->_console = $console;
         $this->_sessionStorage = $sessionStorage;
         $this->_dataStorage = $dataStorage;
+        $this->_ipc = $ipc;
+
+        $this->_output = '';
 
         $this->_commandHandler = new CommandHandler($this);
         $this->_identity = new Identity($this, new Auth( $this->_sessionStorage, $this->_dataStorage ));
         $this->_base = new Base($this);
 
-        // Set STDIN to non-blocking mode
         self::$_instance = $this;
     }
 
@@ -65,6 +77,10 @@ class Kernel {
         $this->_async = $class;
     }
 
+    public function setQueueHandler(string $class) {
+        $this->_queue = $class;
+    }
+
     public function boot() {
         $this->_memoryManager->setAsyncHandler($this->_async);
         $this->_processManager->setMemoryManager($this->_memoryManager);
@@ -72,11 +88,25 @@ class Kernel {
         // Initialize kernel components
         $this->_processManager->initialize();
         $this->_fileSystemManager->initialize();
-        $this->_displayManager->initialize();
-        $this->_keyInputManager->initialize();
         $this->_memoryManager->initialize();
 
         $this->_fileSystemManager->open();
+    }
+
+    public function enqueue($channel, $message) {
+        $this->_queue::enqueue($channel, $message);
+    }
+
+    public function dequeue($channel) {
+        return $this->_queue::dequeue($channel);
+    }
+
+    public function setMessage($channel, $message) {
+        $this->_ipc->write($channel, $message);
+    }
+
+    public function getMessage($channel) {
+        return $this->_ipc->read($channel);
     }
 
     public function handle($request)
@@ -132,129 +162,61 @@ class Kernel {
         } catch (\Exception $e) {
             $response = $e->getMessage();
         }
-        $this->display($response, ['color'=>'yellow']);
+        $this->_output = $response;
     }
 
     private function handleCommandAsync($request) {
         // Dispatch request to appropriate service or process
-        $this->_async::do((function() use ($request) {
+        $this->_async::do((function($resolve, $reject) use ($request) {
             try {
                 $response = $this->_commandProcessor->process($request);
+                $resolve($response);
             } catch (\Exception $e) {
                 $response = $e->getMessage();
+                $reject($response);
             }
         })->bindTo($this))->then((function($response) {
             $this->display($response);
         })->bindTo($this), function($error) {
             // Handle this somehow
-        });
+        })->try();
     }
 
     private function handleNative($request) {
         $output = $this->_commandHandler->handle($request);
-        $this->display($output, ['color'=>'yellow']);
-    }
-
-    public function display($response, $args = []) {
-        $this->_displayManager->send($response, $args);
-    }
-
-    public function displayLine($response, $args = []) {
-        $this->display($response . PHP_EOL, $args);
-    }
-
-    public function input() {
-        return $this->_keyInputManager->capture();
-    }
-
-    public function prompt($prompt = null) {
-        if ( $prompt != null ) {
-            $prompt = " {$prompt} ";
-        } else {
-            $dir = $this->currentDir();
-            $prompt = " \033[90m{$dir}\033[0m ";
-        }
-
-        $this->display("#{$prompt}> ");
-    }
-
-    public function inputSilent( $prompt = "" ) {
-        if (preg_match('/^win/i', PHP_OS)) {
-            $vbscript = sys_get_temp_dir() . 'prompt_password.vbs';
-            file_put_contents(
-              $vbscript, 'wscript.echo(InputBox("'
-              . addslashes($prompt)
-              . '", "", "password here"))');
-            $command = "cscript //nologo " . escapeshellarg($vbscript);
-            $password = rtrim(shell_exec($command));
-            unlink($vbscript);
-            return $password;
-        } else {
-            $command = "/usr/bin/env bash -c 'echo OK'";
-            if (rtrim(shell_exec($command)) !== 'OK') {
-                trigger_error("Can't invoke bash");
-                return;
-            }
-            $command = "/usr/bin/env bash -c 'read -s -p \""
-              . addslashes($prompt)
-              . "\" mypassword && echo \$mypassword'";
-            $password = rtrim(shell_exec($command));
-            echo "\n";
-            return $password;
-        }
+        $this->_console->output($output, 'system');
     }
 
     public function run() {
-        $this->clear();
+        $this->_console->clear();
 
-        $notification_interval = 5;
-        $start_time = time();
+        // Register input channels
+        $this->_console->registerInputChannel('stdio'); // Keyboard input
+        $this->_console->registerInputChannel('system'); // System command responses
+        $this->_console->registerInputChannel('message'); // Background messages
 
-        $this->_async::do(function() use ($start_time, $notification_interval) {
-            while (true) {
-                // Check if it's time to show a notification
-                if (time() - $start_time >= $notification_interval) {
-                    $this->display("Notification: " . date('H:i:s') . "\n");
-                    return;
-                }
-
-                sleep(1); // 0.1 seconds
-            }
-        })->then((function($response) {
-
-        })->bindTo($this), function($error) {
-            // Handle this somehow
-        })->try();
+        // Non-blocking command processing handler for the console
+        $this->_console->when(Event::PROCESSED, (function($b, $m) {
+            $this->handle($m->data[0] ?? '');
+            $this->_console->output($this->_output, 'system');
+            $this->_output = '';
+        })->bindTo($this, $this));
 
         while (true) {
-            $this->update();
-            // $this->clearScreen();
-
-            $this->splash();
-            // $this->maybeLogin();
-
-
-            if ( $input = $this->input() ) {
-                $this->handle($input);
-                $this->display("\n");
-                $this->prompt();
-            }
-            $this->draw();
-
-            usleep(100000); // Sleep for 0.1 second
+            $this->repl(); // Read, Evaluate, Print, Loop
+            usleep(50000); // Sleep for 0.1 second
         }
+    }
+
+    public function repl() {
+        $this->_console
+            ->update()
+            ->display()
+            ->listen();
     }
 
     public function shutdown() {
         // Shutdown kernel components
-    }
-
-    private function splash() {
-        $this->_base->splash();
-    }
-
-    private function welcome() {
-
     }
 
     private function maybeLogin() {
@@ -272,96 +234,5 @@ class Kernel {
         if (!$this->_identity->isAuthenticated()) {
             exit(0);
         }
-    }
-
-    public function deleteFile($file) {
-        $this->_fileSystemManager->open($file);
-        $this->_fileSystemManager->delete(true);
-        return $this->_fileSystemManager->status();
-    }
-
-    public function createFile($file) {
-        $this->_fileSystemManager->open($file);
-        $this->_fileSystemManager->write();
-        return $this->_fileSystemManager->status();
-    }
-
-    public function writeFile($file, $contents) {
-        $this->_fileSystemManager->open($file);
-        $this->_fileSystemManager->contents($contents);
-        $this->_fileSystemManager->write();
-        return $this->_fileSystemManager->status();
-    }
-
-    public function readFile($file) {
-        $this->_fileSystemManager->open($file);
-        $this->_fileSystemManager->read();
-        return $this->_fileSystemManager->contents() ?? $this->_fileSystemManager->status();
-    }
-
-    public function moveFile($destination, $file = null) {
-        if ($file) {
-            $this->_fileSystemManager->open($file);
-        }
-        $this->_fileSystemManager->move($new);
-        return $this->_fileSystemManager->status();
-    }
-
-    public function copyFile($destination, $file = null) {
-        if ($file) {
-            $this->_fileSystemManager->open($file);
-        }
-        $this->_fileSystemManager->copy($new);
-        return $this->_fileSystemManager->status();
-    }
-
-    public function changeDir($dir) {
-        $this->_fileSystemManager->open($dir);
-        return $this->_fileSystemManager->status();
-    }
-
-    public function createDir($dir) {
-        $this->_fileSystemManager->open($dir);
-        $this->_fileSystemManager->createDir();
-        return $this->_fileSystemManager->status();
-    }
-
-    public function listDir($dir = null) {
-        if ($dir) {
-            $this->_fileSystemManager->open($dir);
-        }
-
-        $list = $this->_fileSystemManager->listDir();
-
-        if (! $list || ( is_array($list) && count($list) == 0 )) {
-            return $this->_fileSystemManager->status();
-        }
-
-        $output = '';
-        foreach ($list as $item) {
-            $output .= $item . PHP_EOL;
-        }
-
-        return $output;
-    }
-
-    public function update() {
-        $this->_displayManager->update();
-    }
-
-    public function draw() {
-        $this->_displayManager->draw();
-    }
-
-    public function clear() {
-        $this->_displayManager->clear();
-    }
-
-    public function clearScreen() {
-        $this->_displayManager->clearScreen();
-    }
-
-    public function currentDir() {
-        return $this->_fileSystemManager->path();
     }
 }

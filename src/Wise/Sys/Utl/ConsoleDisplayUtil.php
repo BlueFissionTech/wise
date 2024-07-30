@@ -81,6 +81,13 @@ class ConsoleDisplayUtil {
         return self::$_stdio->send($data);
     }
 
+    public static function print() {
+        $data = implode(PHP_EOL, self::$_content);
+        // self::$_stdio->send($data);
+        // echo $data;
+        self::$_content = [];
+    }
+
     public static function display($data) {
         $inserts = explode(PHP_EOL, $data);
 
@@ -102,7 +109,10 @@ class ConsoleDisplayUtil {
     }
 
     public static function draw() {
-        foreach (self::$_content as $line => $content) {
+        // get the last `screenHeight` number of lines of content, or all lines if it's less than
+        $lines = array_slice(self::$_content, -self::$screenHeight);
+
+        foreach ($lines as $line => $content) {
             self::updateBuffer($line, $content);
         }
         self::drawBuffer();
@@ -117,6 +127,10 @@ class ConsoleDisplayUtil {
         if ($line >= 0 && $line < count(self::$_newBuffer)) {
             self::$_newBuffer[$line] = str_pad(mb_substr($content, 0, self::$screenWidth), self::$screenWidth);
         }
+    }
+
+    public static function getContent() {
+    	return self::$_content;
     }
 
     protected static function drawBuffer() {
@@ -170,30 +184,9 @@ class ConsoleDisplayUtil {
             }
         }
 
-
-        // foreach (self::$_newBuffer as $line => $content) {
-		// 	if ($line <= self::$screenHeight) {
-		// 		fputs($stream, $content);
-		// 	}
-		// }
-
-        // die('testing mmode');
-
-        // Draw the custom cursor at the end of the drawn content
-        self::drawCustomCursor();
-
         // Move the cursor to the bottom right after drawing
-        echo "\033[" . self::$screenHeight . ";0H";
+        // echo "\033[" . self::$screenHeight . ";0H";
         self::$_content = [];
-    }
-
-    public static function drawCustomCursor() {
-        $cursorSymbol = '_'; // Custom cursor symbol
-
-        list($x, $y) = self::$_cursorPosition;
-
-        // Draw the custom cursor
-        echo "\033[" . $y . ";" . $x . "H" . $cursorSymbol;
     }
 
     public static function parseAnsiCodes($line) {

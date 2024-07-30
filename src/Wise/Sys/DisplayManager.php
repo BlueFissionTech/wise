@@ -23,6 +23,12 @@ class DisplayManager {
 	}
 
 	public function send( $data, $args = [] ) {
+		$this->display( $data, $args );
+		$processed = $this->_driver->getContent();
+		$this->_driver->send( Arr::pop($processed) );
+	}
+
+	public function display( $data, $args = [] ) {
 		$arg1 = null;
 		$arg2 = null;
 
@@ -41,8 +47,17 @@ class DisplayManager {
 		$this->_driver->handle( $data, $arg1, $arg2 );
 	}
 
+	public function getSize(): array
+	{
+		return $this->_driver->getTerminalSize();
+	}
+
 	public function draw() {
 		$this->_driver->draw();
+	}
+
+	public function print() {
+		$this->_driver->print();
 	}
 
 	public function clear() {

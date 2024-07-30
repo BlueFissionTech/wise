@@ -12,6 +12,14 @@ class ConsoleDisplayDriver implements IDisplayDriver {
 		$this->displayFormatted($data, $type, $style);
 	}
 
+	public function send( $data ) {
+		ConsoleDisplayUtil::send( $data );
+	}
+
+	public function getContent() {
+		return ConsoleDisplayUtil::getContent();
+	}
+
 	protected function formatStyle( $style = null ) {
 		switch ( $style ) {
 			case 'black':
@@ -85,6 +93,11 @@ class ConsoleDisplayDriver implements IDisplayDriver {
 		}
 	}
 
+	public function getTerminalSize(): array
+	{
+		return ConsoleDisplayUtil::getTerminalSize();
+	}
+
 	public function init() {
 
 	}
@@ -95,6 +108,10 @@ class ConsoleDisplayDriver implements IDisplayDriver {
 
 	public function draw() {
 		ConsoleDisplayUtil::draw();
+	}
+
+	public function print() {
+		ConsoleDisplayUtil::print();
 	}
 
 	public function clear() {
