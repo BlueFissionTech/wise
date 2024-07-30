@@ -32,7 +32,6 @@ class Kernel {
     protected $_sessionStorage;
     protected $_dataStorage;
     protected $_interpreter;
-    protected $_base;
     protected $_ipc;
 
     protected $_console;
@@ -64,7 +63,6 @@ class Kernel {
 
         $this->_commandHandler = new CommandHandler($this);
         $this->_identity = new Identity($this, new Auth( $this->_sessionStorage, $this->_dataStorage ));
-        $this->_base = new Base($this);
 
         self::$_instance = $this;
     }
