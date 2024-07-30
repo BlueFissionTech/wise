@@ -27,7 +27,7 @@ use BlueFission\Automata\Language\{
 	Walker
 };
 use BlueFission\Automata\LLM\Clients\IClient;
-use BlueFission\Wise\Sys\Con\ExtendedStdio;// as Stdio;
+use BlueFission\Wise\Sys\Conn\ExtendedStdio;// as Stdio;
 use BlueFission\IPC\IPC;
 use BlueFission\Data\Queues\MemQueue;
 
