@@ -83,8 +83,7 @@ class ConsoleDisplayUtil {
 
     public static function print() {
         $data = implode(PHP_EOL, self::$_content);
-        // self::$_stdio->send($data);
-        // echo $data;
+        self::$_stdio->send($data);
         self::$_content = [];
     }
 

@@ -47,7 +47,7 @@ class Text extends Component
     protected function calculateOverflow(): void
     {
         $width = $this->getWidth();
-        $lines = explode(PHP_EOL, wordwrap($this->_content, $width, PHP_EOL, $width > 0 ? true : false));
+        $lines = explode(PHP_EOL, wordwrap($this->_content->val(), $width, PHP_EOL, $width > 0 ? true : false));
         $numLines = count($lines);
 
         if ( $numLines > $this->getHeight() ) {

@@ -3,6 +3,7 @@
 namespace BlueFission\Wise\Cli\Components;
 
 use BlueFission\Wise\Sys\Utl\ConsoleDisplayUtil;
+use BlueFission\Wise\Cli\Console;
 use BlueFission\Arr;
 
 class TextOutput extends Component
@@ -28,9 +29,21 @@ class TextOutput extends Component
     {
         $this->addChild(new Text(0, 0, $this->getWidth(), 1, $line, 0, true, false));
 
-        $this->_scrollTop = $this->calculateScrollTop();
+        if ( $this->_console?->getDisplayMode() == Console::DYNAMIC_MODE ) {
+            $this->_scrollTop = $this->calculateScrollTop();
+            $this->update();
+        }
+    }
 
-        $this->update();
+    public function addChild(IDrawable $child): void
+    {
+            parent::addChild($child);
+            if ( $this->_console?->getDisplayMode() == Console::STATIC_MODE ) {
+                $child->update();
+                $output = $child->draw();
+                $this->_console->send(implode(PHP_EOL, $output));
+                $this->_console->send(PHP_EOL);
+            }
     }
 
     protected function calculateScrollTop(): int
@@ -80,8 +93,8 @@ class TextOutput extends Component
         $this->_lines = Arr::make(explode(PHP_EOL, $contents));
 
         // Show only the visible portion of contents given the current scrollTop
-        $visibleContent = $this->_lines->slice($this->_scrollTop, $this->getHeight());
-        $this->_content = implode(PHP_EOL, $visibleContent);
+        $visibleContent = $this->_lines->slice($this->_scrollTop, $this->needsRedraw() ? $this->getHeight() : null );
+        $this->_content->val(implode(PHP_EOL, $visibleContent));
 
         return $visibleContent;
     }

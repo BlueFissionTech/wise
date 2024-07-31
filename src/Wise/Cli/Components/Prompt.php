@@ -6,7 +6,6 @@ class Prompt extends Component
 {
     use Traits\CanMove;
     use Traits\CanResize;
-    use Traits\Collides;
 
     protected bool $_active;
     protected string $_context;
@@ -26,7 +25,7 @@ class Prompt extends Component
 
     public function updateContent(string $content): void
     {
-        $this->_content = $content;
+        $this->_content->val($content);
     }
 
     public function update(): void
@@ -39,7 +38,7 @@ class Prompt extends Component
     protected function calculateOverflow(): void
     {
         $width = $this->getWidth();
-        $lines = explode(PHP_EOL, wordwrap($this->_content, $width, PHP_EOL, $width > 0 ? true : false));
+        $lines = explode(PHP_EOL, wordwrap($this->_content->val(), $width, PHP_EOL, $width > 0 ? true : false));
         $numLines = count($lines);
 
         if ( $numLines > $this->getHeight() ) {
@@ -54,7 +53,7 @@ class Prompt extends Component
         $lines = explode("\n", wordwrap($prompt, $this->_parent ? $this->_parent->getWidth() : $this->getLength() , "\n", true));
 
         $this->_needsRedraw = false;
-        
+
         return $lines;
     }
 
@@ -80,12 +79,13 @@ class Prompt extends Component
 
     public function getLength(): int
     {
-        return strlen($this->render());
+        // Strip ANSI codes for display length
+        return mb_strlen(preg_replace('/\e[[][A-Za-z0-9];?[0-9]*m?/', '', $this->render()));
     }
 
     public function getPrefixLength(): int
     {
-        return strlen($this->getPrefix());
+        return mb_strlen($this->getPrefix());
     }
 
     protected function getPrefix()
@@ -105,7 +105,7 @@ class Prompt extends Component
         $prefix = $this->getPrefix();
 
         // Put the full prompt together
-        $prompt = $prefix . $this->_content;
+        $prompt = $prefix . $this->_content->val();
 
         return $prompt;
     }

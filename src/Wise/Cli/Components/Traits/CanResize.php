@@ -6,11 +6,19 @@ trait CanResize {
 
     public function setWidth(int $width): void
     {
+        if ( $this->_width->val() != $width) {
+            $this->_needsRedraw = true;
+        }
+
         $this->_width->val($width);
     }
 
     public function setHeight(int $height): void
     {
+        if ( $this->_height->val() != $height) {
+            $this->_needsRedraw = true;
+        }
+
         $this->_height->val($height);
     }
 

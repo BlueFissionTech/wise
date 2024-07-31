@@ -202,7 +202,6 @@ class Console implements IDispatcher, IBehavioral
         foreach($this->_content as $content) {
             $this->_displayManager->display($content['line'] . PHP_EOL, $content['args']);
         }
-
         $this->_displayManager->print();
         $this->_content = [];
 
@@ -281,9 +280,9 @@ class Console implements IDispatcher, IBehavioral
     }
 
     public function needsRedraw() {
-        // if ( $this->getDisplayMode() == self::STATIC_MODE ) {
-        //     return false;
-        // }
+        if ( $this->getDisplayMode() == self::STATIC_MODE && count($this->_content) > 0) { 
+            return false;
+        }
 
         foreach( $this->_components as $component ) {
             if ( $component->needsRedraw() ) {

@@ -57,18 +57,22 @@ class REPL extends Component
 
         $console->when(Action::PROCESS, function($b, $m) {
             $data = $m->data[0];
+            if ( !$data?->content || !$data?->channel ) return;
+
             if ($data?->channel == 'stdio') {
-                $this->handleInput($data?->content ?? null);
+                $this->handleInput($data?->content);
             }
         });
         $console->when(Event::RECEIVED, function($b, $m) {
             $data = $m->data[0];
+            if ( !$data?->content || !$data?->channel ) return;
+
             if ($data?->channel == 'stdio') {
-                $this->readInput($data?->content ?? null);
+                $this->readInput($data?->content);
             }
 
             if ($data?->channel == 'system') {
-                $this->addContent($data?->content ?? null);
+                $this->addContent("\033[33m".$data?->content."\033[39m" ?? null);
             }
         });
 
@@ -78,7 +82,6 @@ class REPL extends Component
     public function updatePromptContent(string $content): void
     {
         $this->_prompt->updateContent($content);
-        $this->_cursor->setPosition($this->_prompt->getWidth()+strlen($this->_prompt->getContent()), $this->_prompt->getY());
     }
 
     public function update(): void
@@ -92,6 +95,7 @@ class REPL extends Component
         }
 
         $this->setDimensions($newWidth, $newHeight);
+        $this->_cursor->setPosition($this->_prompt->getLength(), $this->_prompt->getY());
         parent::update();
     }
 
@@ -105,17 +109,25 @@ class REPL extends Component
     public function handleInput($input = null): void
     {
         if ($input) {
-            // $this->updatePromptContent($input);
             $this->_prompt->setActive(false);
-            $newPrompt = new Prompt(0, $this->getHeight() - 1, $this->getWidth(), '', 1, true);
-            $this->_prompt = $newPrompt;
-            $this->_textOutput->addChild($newPrompt);
-            $this->_cursor->setPosition(0, $newPrompt->getY());
-
+            
             if ($this->_console) {
                 $this->_console->perform(Event::PROCESSED, new Meta(data: $input));
-                $this->_console->clear();
             }
+
+            $this->newPrompt();
         }
+    }
+
+    public function newPrompt(): void
+    {
+        $newPrompt = new Prompt(0, $this->getHeight() - 1, $this->getWidth(), '', 1, true);
+        $newCursor = new Cursor($this->_prompt->getLength(), $this->_prompt->getY() - 1, 2);
+        $this->_prompt = $newPrompt;
+        $this->_cursor = $newCursor;
+
+        $this->_textOutput->removeChild($this->_cursor);
+        $this->_textOutput->addChild($newPrompt);
+        $this->_textOutput->addChild($newCursor);
     }
 }

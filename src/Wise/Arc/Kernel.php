@@ -202,13 +202,12 @@ class Kernel {
 
         while (true) {
             $this->repl(); // Read, Evaluate, Print, Loop
-            usleep(50000); // Sleep for 0.1 second
+            usleep(50000); // Sleep for 0.05 seconds
         }
     }
 
     public function repl() {
         $this->_console
-            ->update()
             ->display()
             ->listen();
     }

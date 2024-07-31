@@ -5,6 +5,10 @@ namespace BlueFission\Wise\Cli\Components\Traits;
 trait CanMove {
 
     public function setX($x) {
+        if ( $this->_x->val() != $x) {
+            $this->_needsRedraw = true;
+        }
+
         $this->_x->val($x);
 
         foreach ($this->_children as $child) {
@@ -15,6 +19,10 @@ trait CanMove {
     }
 
     public function setY($y) {
+        if ( $this->_y->val() != $y) {
+            $this->_needsRedraw = true;
+        }
+
         $this->_y->val($y);
 
         foreach ($this->_children as $child) {

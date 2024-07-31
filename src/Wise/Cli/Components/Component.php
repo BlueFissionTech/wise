@@ -5,7 +5,7 @@ namespace BlueFission\Wise\Cli\Components;
 use BlueFission\Wise\Sys\Utl\ConsoleDisplayUtil;
 use BlueFission\Wise\Cli\Console;
 use BlueFission\Collections\Collection;
-use BlueFission\Num;
+use BlueFission\{Str, Num, Arr};
 
 class Component implements IDrawable
 {
@@ -13,7 +13,8 @@ class Component implements IDrawable
     protected Num $_y;
     protected Num $_width;
     protected Num $_height;
-    protected string $_content;
+    protected Str $_content;
+    protected Arr $_renderedLines;
     protected ?IDrawable $_parent;
     protected Collection $_children;
     protected int $_zIndex;
@@ -26,12 +27,14 @@ class Component implements IDrawable
         $this->_y = Num::make($y);
         $this->_width = Num::make($width);
         $this->_height = Num::make($height);
-        $this->_content = $content;
-        $this->_parent = null;
+        $this->_content = Str::make($content);
         $this->_children = new Collection();
         $this->_zIndex = $zIndex;
-        $this->_needsRedraw = true;
+        $this->_needsRedraw = true; // Initially needs to be drawn
+        $this->_renderedLines = Arr::make();
+
         $this->_console = null;
+        $this->_parent = null;
 
         // Constrain positive-only numerical values
         $this->_x->constraint(fn(&$v) => $v = $v < 0 ? 0 : $v);
@@ -62,12 +65,17 @@ class Component implements IDrawable
 
     public function getContent(): string
     {
-        return $this->_content;
+        return $this->_content->val();
     }
 
     public function setContent(string $content): void
     {
-        $this->_content = $content;
+        $change = $this->_content->snapshot()->val($content)->delta();
+        $this->_content->clearSnapshot();
+
+        if ( $change != 0) {
+            $this->_needsRedraw = true;
+        }
     }
 
     public function getZIndex(): int
@@ -77,12 +85,17 @@ class Component implements IDrawable
 
     public function setZIndex(int $zIndex): void
     {
+        if ( $this->_zIndex != $zIndex) {
+            $this->_needsRedraw = true;
+        }
+
         $this->_zIndex = $zIndex;
     }
 
     public function draw(): array
     {
-        $lines = explode(PHP_EOL, wordwrap($this->_content, $this->getWidth(), PHP_EOL, true));
+        $this->_content->snapshot();
+        $lines = explode(PHP_EOL, wordwrap($this->getContent(), $this->getWidth(), PHP_EOL, true));
         $lines = array_slice($lines, 0, $this->getHeight());
         $this->_children->sort(fn($a, $b) => $a->getZIndex() <=> $b->getZIndex());
 
@@ -95,9 +108,19 @@ class Component implements IDrawable
             $childX = $child->getX();
             $childY = $child->getY();
 
+            // // Display dimensions on screen
+            // $dimensions = '['.$child->getWidth().','.$child->getHeight().']';
+            // $childLines[0] = substr_replace($childLines[0] ?? '', $dimensions, 0, strlen($dimensions));
+            
+            
+            // // Display position on screen
+            // $position = '['.$child->getX().','.$child->getY().']';
+            // $childLines[0] = substr_replace($childLines[0] ?? '', $position, 0, strlen($position));
+
             foreach ($childLines as $index => $line) {
                 $parsedChildLine = ConsoleDisplayUtil::parseAnsiCodes($line);
                 $childLineContent = $parsedChildLine['content'];
+
                 $lineLength = mb_strlen($line);
                 if (isset($lines[$childY + $index])) {
                     $parsedCurrentLine = ConsoleDisplayUtil::parseAnsiCodes($lines[$childY + $index]);
@@ -132,10 +155,6 @@ class Component implements IDrawable
             }
         }
 
-        // // Display dimensions on screen
-        // $dimensions = '['.$this->getWidth().','.$this->getHeight().']';
-        // $lines[0] = substr_replace($lines[0] ?? '', $dimensions, 0, strlen($dimensions));
-
         foreach ($aggregatedAnsiCodes as $index => $ansiCodes) {
             foreach (array_reverse($ansiCodes, true) as $pos => $ansiCode) {
                 $ansiCodeLength = mb_strlen($ansiCode);
@@ -148,13 +167,21 @@ class Component implements IDrawable
             }
         }
 
-        $this->_needsRedraw = false;
+        $this->_needsRedraw = $this->_renderedLines->val($lines)->delta() != 0;
+        $this->_renderedLines->clearSnapshot();
 
         return $lines;
     }
 
     public function needsRedraw(): bool
     {
+        if ( 
+            $this->_renderedLines->size() > 0 
+            && $this->_console?->getDisplayMode() == Console::STATIC_MODE 
+        ) {
+            return false;
+        }
+
         foreach ($this->_children as $child) {
             if ( $child->needsRedraw() ) {
                 return true;
@@ -182,6 +209,9 @@ class Component implements IDrawable
         $this->_children[] = $child;
         $child->setParent($this);
         $this->registerChildComponent($child);
+        if ( $this->_console?->getDisplayMode() == Console::DYNAMIC_MODE ) {
+            $this->_needsRedraw = true;
+        }
     }
 
     public function removeChild(IDrawable $child): void

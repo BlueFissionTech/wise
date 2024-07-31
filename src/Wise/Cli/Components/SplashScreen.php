@@ -46,7 +46,7 @@ class SplashScreen extends Component
             $this->_needsRedraw = false;
         }
 
-        return explode(PHP_EOL, $this->_content);
+        return explode(PHP_EOL, $this->_content->val());
     }
 
     public function splash()
@@ -54,6 +54,8 @@ class SplashScreen extends Component
         $effects = ['randomcolor', 'jumble', 'jitter', 'corrupt'];
         $glitchInterval = random_int(3, 7);
         $effect = $effects[array_rand($effects)];
+
+        $content = '';
 
         if (self::$_lastGlitch == 0 || (time() - self::$_lastGlitch) > $glitchInterval) {
             $effect = $effects[array_rand($effects)];
@@ -64,15 +66,17 @@ class SplashScreen extends Component
             foreach ($splash as $line => $data) {
                 $splash[$line] = "\033[37m{$data}\033[0m";
             }
-            $this->_content = implode(PHP_EOL, $splash);
+            $content = implode(PHP_EOL, $splash);
         }
 
-        $this->_content .= PHP_EOL . "            ";
-        $this->_content .= "Workspace Intelligence Shell Environment\033[90m\033[0m";
-        $this->_content .= PHP_EOL . PHP_EOL;
-        $this->_content .= "Running WISE version 0.0.1, produced by \033[36mBlue Fission\033[0m.";
-        $this->_content .= PHP_EOL;
-        $this->_content .= "\033[32mJen\033[0m interpreter running version 0.0.1." . PHP_EOL . PHP_EOL;
+        $content .= PHP_EOL . "            ";
+        $content .= "Workspace Intelligence Shell Environment\033[90m\033[0m";
+        $content .= PHP_EOL . PHP_EOL;
+        $content .= "Running WISE version 0.0.1, produced by \033[36mBlue Fission\033[0m.";
+        $content .= PHP_EOL;
+        $content .= "\033[32mJen\033[0m interpreter running version 0.0.1." . PHP_EOL . PHP_EOL;
+
+        $this->_content->val($content);
     }
 
     protected function glitch($data, $args = null)
@@ -135,6 +139,6 @@ class SplashScreen extends Component
             }
         }
 
-        $this->_content = implode(PHP_EOL, $lines);
+        $this->_content->val(implode(PHP_EOL, $lines));
     }
 }

@@ -59,6 +59,7 @@ $console = new Console(
     new KeyInputManager()
 );
 $console->addComponent($screen);
+$console->setDisplayMode(Console::STATIC_MODE);
 
 // Create and initialize the kernel
 $kernel = new Kernel(
