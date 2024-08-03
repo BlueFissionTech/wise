@@ -37,13 +37,12 @@ class TextOutput extends Component
 
     public function addChild(IDrawable $child): void
     {
-            parent::addChild($child);
-            if ( $this->_console?->getDisplayMode() == Console::STATIC_MODE ) {
-                $child->update();
-                $output = $child->draw();
-                $this->_console->send(implode(PHP_EOL, $output));
-                $this->_console->send(PHP_EOL);
-            }
+        parent::addChild($child);
+        if ( $this->_console?->getDisplayMode() == Console::STATIC_MODE ) {
+            $child->update();
+            $output = $child->draw();
+            $this->_console->send(implode(PHP_EOL, $output));
+        }
     }
 
     protected function calculateScrollTop(): int

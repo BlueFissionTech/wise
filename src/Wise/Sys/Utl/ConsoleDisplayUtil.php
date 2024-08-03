@@ -132,6 +132,10 @@ class ConsoleDisplayUtil {
     	return self::$_content;
     }
 
+    public static function flush() {
+        self::$_content = [];
+    }
+
     protected static function drawBuffer() {
         $prevAnsiState = '';
 

@@ -1,10 +1,10 @@
 <?php
 
-namespace BlueFission\Automata\Language;;
+namespace BlueFission\Wise\Exe;
 
 use Exception;
 
-class Documenter {
+class Jen {
 
 	private $_statements = [];
 
@@ -141,7 +141,7 @@ class Documenter {
 				$this->_tree[$this->_nodes]['entities'][$this->_entity] = $this->_class;
 
 			$this->_expected = [];
-			$this->class = [];
+			$this->_class = [];
 		}
 
 		if ($cmd['token'] == 'T_SYMBOL') {

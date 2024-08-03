@@ -60,6 +60,9 @@ $console = new Console(
 );
 $console->addComponent($screen);
 $console->setDisplayMode(Console::STATIC_MODE);
+// $console->setDisplayMode(Console::DYNAMIC_MODE);
+
+$grammarRules = [];
 
 // Create and initialize the kernel
 $kernel = new Kernel(
@@ -67,7 +70,7 @@ $kernel = new Kernel(
     new CommandProcessor( new Disk() ),
     new MemoryManager(300, 60),  // MemoryManager with 300 seconds threshold and 60 seconds monitoring interval
     new FileSystemManager(['root'=>getcwd()]),
-    new Interpreter( new Grammar( new StemmerLemmatizer() ), new Documenter(), new Walker() ),
+    new Interpreter( new Grammar( new StemmerLemmatizer(), $grammarRules ), new Documenter(), new Walker() ),
     $console, // Our console object we previously setup
     new Disk(['location'=>'../', 'name'=>'storage.json']),
     new SQLite(['database'=>'database.db']),

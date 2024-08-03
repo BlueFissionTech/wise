@@ -31,7 +31,7 @@ class Component implements IDrawable
         $this->_children = new Collection();
         $this->_zIndex = $zIndex;
         $this->_needsRedraw = true; // Initially needs to be drawn
-        $this->_renderedLines = Arr::make();
+        $this->_renderedLines = Arr::make([]);
 
         $this->_console = null;
         $this->_parent = null;
@@ -94,7 +94,6 @@ class Component implements IDrawable
 
     public function draw(): array
     {
-        $this->_content->snapshot();
         $lines = explode(PHP_EOL, wordwrap($this->getContent(), $this->getWidth(), PHP_EOL, true));
         $lines = array_slice($lines, 0, $this->getHeight());
         $this->_children->sort(fn($a, $b) => $a->getZIndex() <=> $b->getZIndex());
@@ -167,7 +166,7 @@ class Component implements IDrawable
             }
         }
 
-        $this->_needsRedraw = $this->_renderedLines->val($lines)->delta() != 0;
+        $this->_needsRedraw = $lines && $this->_renderedLines->snapshot()->val($lines)->delta() != 0;
         $this->_renderedLines->clearSnapshot();
 
         return $lines;

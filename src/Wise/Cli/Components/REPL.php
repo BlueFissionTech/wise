@@ -72,7 +72,11 @@ class REPL extends Component
             }
 
             if ($data?->channel == 'system') {
+                if ( $this->_console?->getDisplayMode() == Console::DYNAMIC_MODE ) {
+                    // $this->addContent(PHP_EOL);
+                }
                 $this->addContent("\033[33m".$data?->content."\033[39m" ?? null);
+                echo "\n"; // TODO, handle this through the driver
             }
         });
 

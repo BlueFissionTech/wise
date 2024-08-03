@@ -232,4 +232,8 @@ class Kernel {
             exit(0);
         }
     }
+
+    protected function output() {
+        return $this->_output;
+    }
 }

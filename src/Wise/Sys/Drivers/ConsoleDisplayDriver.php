@@ -20,6 +20,10 @@ class ConsoleDisplayDriver implements IDisplayDriver {
 		return ConsoleDisplayUtil::getContent();
 	}
 
+	public function flush() {
+		return ConsoleDisplayUtil::flush();
+	}
+
 	protected function formatStyle( $style = null ) {
 		switch ( $style ) {
 			case 'black':

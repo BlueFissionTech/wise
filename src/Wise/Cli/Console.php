@@ -219,6 +219,8 @@ class Console implements IDispatcher, IBehavioral
         // If there is an active cursor drawn to the screen, move the console cursor to that position
         if ($this->_activeCursor) {
             echo "\033[" . $this->_activeCursor->getAbsoluteY() . ";" . $this->_activeCursor->getAbsoluteX() . "H";
+            // Show the cursor
+            echo "\033[?25h";
         }
 
         $this->_content = [];
@@ -334,7 +336,6 @@ class Console implements IDispatcher, IBehavioral
         } elseif ( Str::pos($input, $this->_specialChars->flip()->get('ENTER')) === 0 ) {
             // Handle enter
             $this->trigger(Action::PROCESS, new Meta(data: new Data( channel: 'stdio', content: $this->_buffer)));
-            $this->addToContent("\n");
             $this->_buffer = '';
         } elseif ( Str::pos($input, $this->_specialChars->flip()->get('UP')) === 0 ) {
             // Handle up arrow

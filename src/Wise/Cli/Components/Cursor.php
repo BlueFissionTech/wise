@@ -2,6 +2,8 @@
 
 namespace BlueFission\Wise\Cli\Components;
 
+use BlueFission\Wise\Cli\Console;
+
 class Cursor extends Component
 {
     use Traits\CanMove;
@@ -17,6 +19,12 @@ class Cursor extends Component
 
     public function draw(): array
     {
+        $this->_needsRedraw = false;
+
+        if ( $this->_console?->getDisplayMode() == Console::STATIC_MODE ) {
+            return [];
+        }
+
         // $content should update with the character at the current cursor position (space for blank)
         $this->_content->val(' ');
         if ($this->_parent && $this->_parent instanceof TextOutput) {
@@ -28,12 +36,9 @@ class Cursor extends Component
         // Blinking highlighted block for cursor, blinking every second
         $highlight = (int)(microtime(true) * 2) % 2 === 0;
 
-        $this->_needsRedraw = false;
-
         // remove highlight after content
-        // return [ ($highlight ? "\033[7m{$this->_content->val()}\033[0m" : "{$this->_content->val()}") ];
-        return [ ($highlight ? "_" : "{$this->_content->val()}") ];
-
+        return [ ($highlight ? "\033[7m{$this->_content->val()}\033[0m" : "{$this->_content->val()}") ];
+        // return [ ($highlight ? "_" : "{$this->_content->val()}") ];
     }
 
     public function setColor(string $color): void

@@ -26,6 +26,7 @@ class DisplayManager {
 		$this->display( $data, $args );
 		$processed = $this->_driver->getContent();
 		$this->_driver->send( Arr::pop($processed) );
+		$this->_driver->flush();
 	}
 
 	public function display( $data, $args = [] ) {
