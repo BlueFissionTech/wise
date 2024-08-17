@@ -1,7 +1,7 @@
 <?php
 namespace BlueFission\Wise\Res;
 
-use BlueFission\BlueCore\Command\BaseResource;
+use BlueFission\Wise\Res\BaseResource;
 use BlueFission\SimpleClients\WikiNewsService;
 
 class NewsResource extends BaseResource

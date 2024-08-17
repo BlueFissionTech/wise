@@ -73,7 +73,7 @@ class ExtendedStdio extends Stdio
             stream_set_blocking($this->_stdinProcess->pipes(1), false);
         }
 
-        stream_set_blocking(STDIN, false);
+        stream_set_blocking(\STDIN, false);
     }
 
     /**

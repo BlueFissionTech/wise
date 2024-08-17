@@ -139,7 +139,6 @@ class Kernel {
         }
 
         $process = $this->_processManager->createProcess($resourceObj, $command);
-        $this->_memoryManager->register($process);
 
         return $response;
     }
