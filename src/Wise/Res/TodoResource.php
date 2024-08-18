@@ -1,5 +1,5 @@
 <?php
-namespace BlueFission\Wise\Commands;
+namespace BlueFission\Wise\Res;
 
 use BlueFission\Wise\Res\BaseResource;
 use BlueFission\Data\Storage\Disk;
