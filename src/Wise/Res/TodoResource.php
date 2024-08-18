@@ -1,7 +1,7 @@
 <?php
 namespace BlueFission\Wise\Commands;
 
-use BlueFission\Wise\Cmd\BaseResource;
+use BlueFission\Wise\Res\BaseResource;
 use BlueFission\Data\Storage\Disk;
 
 class TodoResource extends BaseResource
