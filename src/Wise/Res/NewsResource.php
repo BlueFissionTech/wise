@@ -2,18 +2,18 @@
 namespace BlueFission\Wise\Res;
 
 use BlueFission\Wise\Res\BaseResource;
-use BlueFission\SimpleClients\WikiNewsService;
+use BlueFission\SimpleClients\WikiNewsClient;
 
 class NewsResource extends BaseResource
 {
-    protected $_service;
+    protected $_client;
 
     protected $_name = 'news';
     protected $_actions = ['get', 'find', 'select', 'help'];
 
-    public function __construct(WikiNewsService $wikiNews)
+    public function __construct(WikiNewsClient $wikiNews)
     {
-        $this->_service = $wikiNews;
+        $this->_client = $wikiNews;
         $this->_key = 'id';
         $this->_itemName = 'headline';
         $this->_helpDetails['get'] = ["  - get: Get the latest headlines from WikiNews by topic then location.", "      Usage: `get the news`", "      Usage: `get news about <topic> [in <location>]`"];
@@ -27,7 +27,7 @@ class NewsResource extends BaseResource
 
         $topic = $args['0'] ?? '';
         $location = $args['1'] ?? '';
-        $this->_entries = $this->_service->getHeadlines($topic, $location);
+        $this->_entries = $this->_client->getHeadlines($topic, $location);
         if (!empty($this->_entries)) {
             $i = 1;
             $entries = $this->_entries;
@@ -52,7 +52,7 @@ class NewsResource extends BaseResource
     {
         $location = $args['0'] ?? '';
         $topic = $args['1'] ?? '';
-        $this->_entries = $this->_service->getHeadlines($topic, $location);
+        $this->_entries = $this->_client->getHeadlines($topic, $location);
         if (!empty($this->_entries)) {
             $i = 1;
             $entries = $this->_entries;

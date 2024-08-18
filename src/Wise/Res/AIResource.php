@@ -1,7 +1,7 @@
 <?php
 namespace BlueFission\Wise\Res;
 
-use BlueFission\SimpleClients\HuggingFaceService;
+use BlueFission\SimpleClients\HuggingFaceClient;
 use BlueFission\Data\Storage\Disk;
 use BlueFission\Services\Service;
 use BlueFission\DevValue;
@@ -9,12 +9,12 @@ use BlueFission\DevValue;
 class AIResource extends Service
 {
     private $_storage;
-    private $_huggingFaceService;
+    private $_huggingFaceClient;
 
     public function __construct()
     {
         parent::__construct();
-        $this->_huggingFaceService = new HuggingFaceService();
+        $this->_huggingFaceClient = new HuggingFaceClient();
         $this->_storage = new Disk();
     }
 
@@ -23,8 +23,8 @@ class AIResource extends Service
         $action = $behavior->name();
         $this->_response = "Invalid action specified.";
 
-        if (!$this->_huggingFaceService->hasApiKey()) {
-            $this->_response = "API Key not found for HuggingFaceService. Please set your API key in the .env file.";
+        if (!$this->_huggingFaceClient->hasApiKey()) {
+            $this->_response = "API Key not found for HuggingFaceClient. Please set your API key in the .env file.";
             return;
         }
 
@@ -58,39 +58,39 @@ class AIResource extends Service
     public function list($args)
     {
         $searchTerm = $args[0] ?? '';
-        return $this->_huggingFaceService->listModels($searchTerm);
+        return $this->_huggingFaceClient->listModels($searchTerm);
     }
 
     public function show($args)
     {
         $modelId = $args[0] ?? '';
-        return $this->_huggingFaceService->getModelDetails($modelId);
+        return $this->_huggingFaceClient->getModelDetails($modelId);
     }
 
     public function find($args)
     {
         $searchTerm = $args[0] ?? '';
-        return $this->_huggingFaceService->findDatasets($searchTerm);
+        return $this->_huggingFaceClient->findDatasets($searchTerm);
     }
 
     public function get($args)
     {
         $datasetId = $args[0] ?? '';
-        return $this->_huggingFaceService->getDatasetDetails($datasetId);
+        return $this->_huggingFaceClient->getDatasetDetails($datasetId);
     }
 
     public function useModel($args)
     {
         $modelId = $args[0] ?? '';
         $inputText = $args[1] ?? '';
-        return $this->_huggingFaceService->useModel($modelId, $inputText);
+        return $this->_huggingFaceClient->useModel($modelId, $inputText);
     }
 
     public function useSpace($args)
     {
         $spaceId = $args[0] ?? '';
         $inputText = $args[1] ?? '';
-        return $this->_huggingFaceService->useSpace($spaceName, $method, $data, $queryParams);
+        return $this->_huggingFaceClient->useSpace($spaceName, $method, $data, $queryParams);
     }
 
     public function help()
@@ -221,19 +221,19 @@ class AIResource extends Service
     public function listSpaces($args)
     {
         $searchTerm = $args[0] ?? '';
-        return $this->_huggingFaceService->findSpaces($searchTerm);
+        return $this->_huggingFaceClient->findSpaces($searchTerm);
     }
 
     public function showSpace($args)
     {
         $spaceName = $args[0] ?? '';
-        return $this->_huggingFaceService->getSpaceDetails($spaceName);
+        return $this->_huggingFaceClient->getSpaceDetails($spaceName);
     }
 
     public function findSpacesByModel($args)
     {
         $modelId = $args[0] ?? '';
-        return $this->_huggingFaceService->findSpacesByModel($modelId);
+        return $this->_huggingFaceClient->findSpacesByModel($modelId);
     }
 
     private function formatSpaceList($spaces)

@@ -2,7 +2,7 @@
 namespace BlueFission\Wise\Res;
 
 use BlueFission\Wise\Res\BaseResource;
-use BlueFission\SimpleClients\OpenAIService;
+use BlueFission\SimpleClients\OpenAIClient;
 use BlueFission\Data\Storage\Disk;
 use \BlueFission\Connections\Curl;
 
@@ -109,12 +109,12 @@ class APIResource extends BaseResource
 
         $sampleJson = $this->jsonSample();
 
-        // Initialize the OpenAIService
-        $openAIService = new OpenAIService();
+        // Initialize the OpenAIClient
+        $openAIClient = new OpenAIClient();
 
         // Generate the code using GPT-3
         $gpt3_prompt = "Sample:\n$sampleJson\n\nTitle:\"$title\" \n\nCommand:\"$prompt\" \n\nUsing the example, generate a JSON file representing the API call and the PHP to consume the response: ";
-        $gpt3_response = $openAIService->complete($gpt3_prompt, ['max_tokens'=>3000]);
+        $gpt3_response = $openAIClient->complete($gpt3_prompt, ['max_tokens'=>3000]);
 
         // Check for errors in the response
         if (isset($gpt3_response['error'])) {

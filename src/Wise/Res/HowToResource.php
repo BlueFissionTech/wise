@@ -4,15 +4,15 @@
 namespace BlueFission\Wise\Res;
 
 use BlueFission\Services\Service;
-use BlueFission\SimpleClients\WikiHowService;
+use BlueFission\SimpleClients\WikiHowClient;
 
 class HowToResource extends Service
 {
-    private $wikiHowService;
+    private $wikiHowClient;
 
-    public function __construct(WikiHowService $wikiHowService)
+    public function __construct(WikiHowClient $wikiHowClient)
     {
-        $this->wikiHowService = $wikiHowService;
+        $this->wikiHowClient = $wikiHowClient;
         parent::__construct();
     }
 
@@ -20,7 +20,7 @@ class HowToResource extends Service
     {
         if (isset($args) && isset($args[0])) {
             $query = $args[0];
-            $results = $this->wikiHowService->search($query);
+            $results = $this->wikiHowClient->search($query);
 
             if (!empty($results)) {
                 $response = "Here are some WikiHow tutorials related to your query:\n\n";
@@ -44,7 +44,7 @@ class HowToResource extends Service
     {
         if (isset($args) && isset($args[0])) {
             $url = $args[0];
-            $steps = $this->wikiHowService->getStepsAsString($url);
+            $steps = $this->wikiHowClient->getStepsAsString($url);
 
             if (!empty($steps)) {
                 $this->_response = "Here are the steps for the WikiHow tutorial:\n\n{$steps}";

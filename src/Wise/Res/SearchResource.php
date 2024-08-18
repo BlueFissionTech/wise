@@ -3,21 +3,21 @@
 namespace BlueFission\Wise\Res;
 
 use BlueFission\Services\Service;
-use BlueFission\SimpleClients\GoogleSearchService;
-use BlueFission\SimpleClients\DuckDuckGoSearchService;
+use BlueFission\SimpleClients\GoogleSearchClient;
+use BlueFission\SimpleClients\DuckDuckGoSearchClient;
 
 class SearchResource extends Service
 {
-    private $googleSearchService;
-    private $duckDuckGoSearchService;
+    private $googleSearchClient;
+    private $duckDuckGoSearchClient;
     private $_page;
     private $_perPage;
     private $_results;
 
-    public function __construct(GoogleSearchService $googleSearchService, DuckDuckGoSearchService $duckDuckGoSearchService)
+    public function __construct(GoogleSearchClient $googleSearchClient, DuckDuckGoSearchClient $duckDuckGoSearchClient)
     {
-        $this->googleSearchService = $googleSearchService;
-        $this->duckDuckGoSearchService = $duckDuckGoSearchService;
+        $this->googleSearchClient = $googleSearchClient;
+        $this->duckDuckGoSearchClient = $duckDuckGoSearchClient;
 
         $this->_page = (int)store('_system.search.page');
         $this->_perPage = (int)store('_system.search.per_page');
@@ -67,12 +67,12 @@ class SearchResource extends Service
         if (isset($args) && isset($args[0])) {
             $query = $args[0];
 
-            // Use GoogleSearchService if the API key is available
-            if ($this->googleSearchService->hasApiKey()) {
-                $results = $this->googleSearchService->search($query);
+            // Use GoogleSearchClient if the API key is available
+            if ($this->googleSearchClient->hasApiKey()) {
+                $results = $this->googleSearchClient->search($query);
             } else {
-                // Use DuckDuckGoSearchService as a fallback when the Google API key isn't present
-                $results = $this->duckDuckGoSearchService->search($query);
+                // Use DuckDuckGoSearchClient as a fallback when the Google API key isn't present
+                $results = $this->duckDuckGoSearchClient->search($query);
             }
 
             $this->_results = $results;

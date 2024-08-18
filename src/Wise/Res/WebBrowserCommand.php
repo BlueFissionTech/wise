@@ -4,19 +4,19 @@
 namespace BlueFission\Wise\Res;
 
 use BlueFission\Services\Service;
-use BlueFission\SimpleClients\SimpleTextWebBrowsingService;
+use BlueFission\Wise\Prg\WebClient;
 
 class WebBrowserResource extends Service
 {
-    private $webBrowsingService;
+    private $webBrowsingClient;
     private $_page;
     private $_perPage;
     private $_content;
     private $_bookmarks;
 
-    public function __construct(SimpleTextWebBrowsingService $webBrowsingService)
+    public function __construct(WebClient $webBrowsingClient)
     {
-        $this->webBrowsingService = $webBrowsingService;
+        $this->webBrowsingClient = $webBrowsingClient;
 
         $this->_page = (int)store('_system.website.page');
         $this->_perPage = (int)store('_system.website.per_page');
@@ -68,7 +68,7 @@ class WebBrowserResource extends Service
     {
         if (isset($args[0])) {
             $url = $args[0];
-            $success = $this->webBrowsingService->browse($url);
+            $success = $this->webBrowsingClient->browse($url);
             if ($success) {
                 $this->_response = "Browsing to: $url\nEnter the command `show website` to view the page content.";
             } else {
@@ -81,8 +81,8 @@ class WebBrowserResource extends Service
 
     public function viewPageContent($behavior, $args): void
     {
-        $this->webBrowsingService->browse();
-        $this->_content = $this->webBrowsingService->viewPageContent();
+        $this->webBrowsingClient->browse();
+        $this->_content = $this->webBrowsingClient->viewPageContent();
         $page = $this->_page;
         $totalPages = ceil(strlen($this->_content) / $this->_perPage);
 
@@ -104,7 +104,7 @@ class WebBrowserResource extends Service
 
     public function getLinks($behavior, $args): void
     {
-        $links = $this->webBrowsingService->getLinks();
+        $links = $this->webBrowsingClient->getLinks();
         if ($links !== null) {
             $total = count($links);
             $totalPages = ceil($total / $this->_perLinkPage);
@@ -149,7 +149,7 @@ class WebBrowserResource extends Service
     {
         if (isset($args[0])) {
             $fields = $args[0];
-            $this->webBrowsingService->fillForm($fields);
+            $this->webBrowsingClient->fillForm($fields);
             $this->_response = "Form fields filled.";
         } else {
             $this->_response = "Please provide an array of form fields to fill.";
@@ -160,7 +160,7 @@ class WebBrowserResource extends Service
     {
         if (isset($args[0])) {
             $selector = $args[0];
-            $this->webBrowsingService->clickElement($selector);
+            $this->webBrowsingClient->clickElement($selector);
             $this->_response = "Element clicked.";
         } else {
             $this->_response = "Please provide a selector for the element to click.";
@@ -171,7 +171,7 @@ class WebBrowserResource extends Service
     {
         if (isset($args[0])) {
             $selector = $args[0];
-            $this->webBrowsingService->submitForm($selector);
+            $this->webBrowsingClient->submitForm($selector);
             $this->_response = "Form submitted.";
         } else {
             $this->_response = "Please provide a selector for the form to submit.";
@@ -180,7 +180,7 @@ class WebBrowserResource extends Service
 
     public function getForms($behavior, $args): void
     {
-        $forms = $this->webBrowsingService->getForms();
+        $forms = $this->webBrowsingClient->getForms();
         $response = "Forms on the page:\n\n";
         foreach ($forms as $form) {
             $response .= "ID: {$form['id']}, Action: {$form['action']}, Method: {$form['method']}\n";
@@ -192,7 +192,7 @@ class WebBrowserResource extends Service
     {
         if (isset($args[0])) {
             $formId = $args[0];
-            $formFields = $this->webBrowsingService->getFormFields($formId);
+            $formFields = $this->webBrowsingClient->getFormFields($formId);
 
             $response = "Fields in form with ID '$formId':\n\n";
             foreach ($formFields as $field) {
@@ -206,7 +206,7 @@ class WebBrowserResource extends Service
 
     public function listItems($behavior, $args): void
     {
-        $this->webBrowsingService->browse();
+        $this->webBrowsingClient->browse();
 
         if ($behavior->name() == 'next') {
             $this->_linkPage++;
@@ -240,7 +240,7 @@ class WebBrowserResource extends Service
             $args = explode ( ' ', $args[0] );
         }
         if (count($args) >= 2) {
-            $this->webBrowsingService->browse();
+            $this->webBrowsingClient->browse();
 
             $number = null;
             $selector = 'body';
@@ -253,7 +253,7 @@ class WebBrowserResource extends Service
             switch ($itemType) {
                 case 'link':
                     if ($number) {
-                        $links = $this->webBrowsingService->getLinks();
+                        $links = $this->webBrowsingClient->getLinks();
                         $link = isset($links[$number]) ? $links[$number] : null;
                         if ($link) {
                             $selector = $link['selector'];
@@ -278,7 +278,7 @@ class WebBrowserResource extends Service
 
     public function listMedia($behavior, $args): void
     {
-        $media = $this->webBrowsingService->getMedia();
+        $media = $this->webBrowsingClient->getMedia();
 
         if (!empty($media)) {
             $response = "Here is a list of media on the page:\n\n";
@@ -295,10 +295,10 @@ class WebBrowserResource extends Service
     {
         if (isset($args[0]) && is_numeric($args[0])) {
             $index = intval($args[0]) - 1;
-            $media = $this->webBrowsingService->getMedia();
+            $media = $this->webBrowsingClient->getMedia();
 
             if (isset($media[$index])) {
-                $this->webBrowsingService->downloadMedia($media[$index]['url']);
+                $this->webBrowsingClient->downloadMedia($media[$index]['url']);
                 $this->_response = "The selected media has been downloaded.";
             } else {
                 $this->_response = "Invalid media selection. Please provide a valid index.";
@@ -310,24 +310,24 @@ class WebBrowserResource extends Service
 
     public function bookmark()
     {
-        $this->_bookmarks[] = $this->webBrowsingService->getCurrentURL();
+        $this->_bookmarks[] = $this->webBrowsingClient->getCurrentURL();
         $this->_response = "Page bookmarked.";
     }
 
     public function viewPageAsPlainText($behavior, $args): void
     {
-        $this->_response = $this->webBrowsingService->viewPageAsPlainText();
+        $this->_response = $this->webBrowsingClient->viewPageAsPlainText();
     }
 
     public function goBack($behavior, $args): void
     {
-        $this->webBrowsingService->goBack();
+        $this->webBrowsingClient->goBack();
         $this->_response = "Navigating back.";
     }
 
     public function goForward($behavior, $args): void
     {
-        $this->webBrowsingService->goForward();
+        $this->webBrowsingClient->goForward();
         $this->_response = "Navigating forward.";
     }
 

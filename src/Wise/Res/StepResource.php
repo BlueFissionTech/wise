@@ -6,7 +6,7 @@ use BlueFission\Arr;
 use BlueFission\Services\Service;
 use BlueFission\Data\Storage\Disk;
 use BlueFission\Behavioral\IDispatcher;
-use BlueFission\SimpleClients\OpenAIService;
+use BlueFission\SimpleClients\OpenAIClient;
 
 class StepResource extends Service {
 
@@ -61,8 +61,8 @@ class StepResource extends Service {
         }
 
         try {
-            // Initialize the OpenAIService
-            $openAIService = new OpenAIService();
+            // Initialize the OpenAIClient
+            $openAIClient = new OpenAIClient();
 
             $dialogue = instance()->service('convo')->generateRecentDialogueText(25);
             $json = $this->jsonSample();
@@ -82,7 +82,7 @@ class StepResource extends Service {
 
             // Use GPT-3 to get the prompt
             $gpt3_prompt = "\"$input\" \n\n Generate valid JSON in the identical format and same fields as the example except with descriptions of the User's goal, replace the steps with ones to complete the particular goal, and add the next immediate action to take as presented in the conversation. \n\nJSON: ";
-            $gpt3_response = $openAIService->complete($gpt3_prompt, ['max_tokens'=>1000]);
+            $gpt3_response = $openAIClient->complete($gpt3_prompt, ['max_tokens'=>1000]);
 
             // Check if there are errors in the response
             if (isset($gpt3_response['error'])) {
@@ -302,8 +302,8 @@ class StepResource extends Service {
         }
 
         try {
-            // Initialize the OpenAIService
-            $openAIService = new OpenAIService();
+            // Initialize the OpenAIClient
+            $openAIClient = new OpenAIClient();
 
             // Get the recent conversation dialogue for context
             $dialogue = instance()->service('convo')->generateRecentDialogueText(25);
@@ -312,7 +312,7 @@ class StepResource extends Service {
             $prompt = "$dialogue\n\nCreate a new goal to solve the user's needs:";
 
             // Use GPT-3 to generate a new goal
-            $response = $openAIService->complete($prompt);
+            $response = $openAIClient->complete($prompt);
 
             // Check if there are errors in the response
             if (isset($response['error'])) {
@@ -335,8 +335,8 @@ class StepResource extends Service {
         }
 
         try {
-            // Initialize the OpenAIService
-            $openAIService = new OpenAIService();
+            // Initialize the OpenAIClient
+            $openAIClient = new OpenAIClient();
 
             // Get the most recent dialogue and goal description
             $dialogue = instance()->service('convo')->generateRecentDialogueText(25);
@@ -346,7 +346,7 @@ class StepResource extends Service {
 
             // Use GPT-3 to generate a new action
             $prompt = "Given the following conversation, goal, and task define the next immediate action to complete the goal:\n\n$dialogue\n\nGoal: $goal\n\Task: $step\n\nAction:";
-            $gpt3_response = $openAIService->complete($prompt);
+            $gpt3_response = $openAIClient->complete($prompt);
 
             // Check if there are errors in the response
             if (isset($gpt3_response['error'])) {
@@ -369,14 +369,14 @@ class StepResource extends Service {
         }
 
         try {
-            // Initialize the OpenAIService
-            $openAIService = new OpenAIService();
+            // Initialize the OpenAIClient
+            $openAIClient = new OpenAIClient();
 
             $prompt = ($this->_steps['goal']['description'] ?? $this->_steps['goal']->description) . "\n\n";
             $prompt .= "Create a list of steps to achieve the goal: ";
 
             // Use GPT-3 to get the prompt
-            $gpt3_response = $openAIService->complete($prompt);
+            $gpt3_response = $openAIClient->complete($prompt);
 
             // Check if there are errors in the response
             if (isset($gpt3_response['error'])) {

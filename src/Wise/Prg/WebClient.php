@@ -1,7 +1,7 @@
 <?php
 
-// SimpleTextWebBrowsingService.php
-namespace App\Business\Services;
+// WebClient.php
+namespace BlueFission\Wise\Prg;
 
 use BlueFission\Services\Service;
 use DOMDocument;
@@ -9,7 +9,7 @@ use DOMXPath;
 use GuzzleHttp\Client;
 use GuzzleHttp\Cookie\CookieJar;
 
-class SimpleTextWebBrowsingService extends Service
+class WebClient extends Service
 {
     private $html;
     private $dom;

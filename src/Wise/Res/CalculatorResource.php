@@ -3,7 +3,7 @@ namespace BlueFission\Wise\Res;
 
 use BlueFission\Wise\Res\BaseResource;
 use BlueFission\Data\Storage\Disk;
-use BlueFission\SimpleClients\OpenAIService;
+use BlueFission\SimpleClients\OpenAIClient;
 use BlueFission\BlueCore\Business\Prompts\CreateMathExpression;
 
 class CalculatorResource extends BaseResource
@@ -43,13 +43,13 @@ class CalculatorResource extends BaseResource
         }
 
         try {
-            // Initialize the OpenAIService
-            $openAIService = new OpenAIService();
+            // Initialize the OpenAIClient
+            $openAIClient = new OpenAIClient();
             
             // die(var_dump($expression));
 
             $prompt = (new CreateMathExpression($expression))->prompt();
-            $gpt3_response = $openAIService->complete($prompt, ['max_tokens'=>50, 'stop'=>[]]);
+            $gpt3_response = $openAIClient->complete($prompt, ['max_tokens'=>50, 'stop'=>[]]);
 
             // Check if there are errors in the response
             if (isset($gpt3_response['error'])) {

@@ -1,12 +1,12 @@
 <?php
 
-// WebBrowsingService.php
-namespace App\Business\Services;
+// WebBrowser.php
+namespace BlueFission\Wise\Prg;
 
 use BlueFission\Services\Service;
 use Symfony\Component\Panther\Client;
 
-class WebBrowsingService extends Service
+class WebBrowser extends Service
 {
     private $client;
 

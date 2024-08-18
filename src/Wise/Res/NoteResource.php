@@ -3,7 +3,7 @@
 namespace BlueFission\Wise\Res;
 
 use BlueFission\BlueCore\Business\Prompts\MakeNote;
-use BlueFission\SimpleClients\OpenAIService;
+use BlueFission\SimpleClients\OpenAIClient;
 use BlueFission\Data\Storage\Disk;
 use BlueFission\Services\Service;
 
@@ -114,12 +114,12 @@ class NoteResource extends Service
 
         $dialogue = instance()->service('convo')->generateRecentDialogueText(25);
 
-        // Initialize the OpenAIService
-        $openAIService = new OpenAIService();
+        // Initialize the OpenAIClient
+        $openAIClient = new OpenAIClient();
 
         // Generate the code using GPT-3
         $prompt = new MakeNote($input, $dialogue);
-        $gpt3_response = $openAIService->chat($prompt->prompt(), ['max_tokens'=>1000]);
+        $gpt3_response = $openAIClient->chat($prompt->prompt(), ['max_tokens'=>1000]);
 
         // Check for errors in the response
         if (isset($gpt3_response['error'])) {
