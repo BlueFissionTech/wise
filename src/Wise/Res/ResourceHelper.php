@@ -10,10 +10,6 @@ class ResourceHelper extends Service
     protected $_page;
     protected $_perPage;
 
-    protected $knownResources = [
-        'system', 'model', 'controller', 'user', 'filemanager', 'database', 'code', 'skill', 'command', 'info', 'weather', 'website', 'web', 'howto', 'news', 'variable', 'file', 'todo', 'queue', 'stack', 'schedule', 'ai', 'transcript', 'task', 'step', 'calc', 'action', 'api', 'feature', 'note', 'entity'
-    ];
-
     public function __construct()
     {
         $this->_page = (int)store('_system.resource.page');
@@ -21,6 +17,9 @@ class ResourceHelper extends Service
 
         $this->_page = $this->_page > 0 ? $this->_page : 1;
         $this->_perPage = $this->_perPage > 0 ? $this->_perPage : 25;
+
+        $this->knownResources = array_keys(self::$resources);
+        $this->resourceDescriptions = self::$resources;
 
         parent::__construct();
     }
@@ -181,6 +180,14 @@ class ResourceHelper extends Service
             "- help resource: Show this help message.";
     }
 
+    public static function addResource($resourceName, $description = '', $hint = '')
+    {
+        self::$resources[$resourceName] = [
+            'desc' => $description,
+            'hint' => $hint
+        ];
+    }
+
     public function __destruct()
     {
         store('_system.resource.page', $this->_page);
@@ -188,7 +195,7 @@ class ResourceHelper extends Service
     }
 
     // Descriptions and hints for each resource
-    private $resourceDescriptions = [
+    private static $resources = [
         'system' => [
             'desc' => 'The system resource manages core system functionalities and configurations.',
             'hint' => 'Use the system resource in combination with other resources to create complex tasks or automate processes.'
