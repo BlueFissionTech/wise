@@ -15,8 +15,11 @@ use BlueFission\Wise\Sys\{
 	Utl\KeyInputUtil
 };
 use BlueFission\Wise\Cmd\CommandProcessor;
+use BlueFission\Wise\Nav\SynthetiqBootstrap;
 use BlueFission\Wise\Cli\Console;
 use BlueFission\Wise\Cli\Components;
+use BlueFission\Wise\Sys\Memory\WorkingMemoryCoordinator;
+use BlueFission\Wise\Usr\Profile;
 use BlueFission\Async\{Heap, Thread, Fork};
 use BlueFission\Data\Storage\{Disk, Memory, SQLite};
 use BlueFission\Automata\Language\{
@@ -24,6 +27,7 @@ use BlueFission\Automata\Language\{
 	Grammar,
 	StemmerLemmatizer,
 	Documenter,
+	Reader,
 	Walker
 };
 use BlueFission\Automata\LLM\Clients\IClient;
@@ -65,9 +69,16 @@ $console->setDisplayMode(Console::STATIC_MODE);
 $grammarRules = [];
 
 // Create and initialize the kernel
+$navigator = null;
+try {
+    $navigator = SynthetiqBootstrap::fromVendorSampleConfigs();
+} catch (\Throwable $e) {
+    $navigator = null;
+}
+
 $kernel = new Kernel(
     new ProcessManager(),
-    new CommandProcessor( new Disk() ),
+    new CommandProcessor( new Disk(), null, $navigator ),
     new MemoryManager(300, 60),  // MemoryManager with 300 seconds threshold and 60 seconds monitoring interval
     new FileSystemManager(['root'=>getcwd()]),
     new Interpreter( new Grammar( new StemmerLemmatizer(), $grammarRules ), new Documenter(), new Walker() ),
@@ -76,6 +87,23 @@ $kernel = new Kernel(
     new SQLite(['database'=>'database.db']),
     new IPC(new Memory())
 );
+
+$workingMemory = new WorkingMemoryCoordinator(
+    new Reader(new Grammar(new StemmerLemmatizer(), $grammarRules), new Documenter())
+);
+
+$kernel->setWorkingMemory($workingMemory);
+$kernel->setProfile(new Profile(getenv('WISE_PROFILE_ID') ?: 'console', ['user']));
+
+$globalMax = getenv('WISE_MEMORY_MAX_GLOBAL');
+if ($globalMax !== false && is_numeric($globalMax)) {
+    $kernel->setWorkingMemoryMaxSize('global', (int)$globalMax);
+}
+
+$userMax = getenv('WISE_MEMORY_MAX_USER');
+if ($userMax !== false && is_numeric($userMax)) {
+    $kernel->setWorkingMemoryMaxSize('user', (int)$userMax, $kernel->profile()?->id());
+}
 
 // Set the Async handler to an appropriate driver
 $kernel->setAsyncHandler( function_exists('pcntl_fork') ? Fork::class : Thread::class );

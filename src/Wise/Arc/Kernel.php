@@ -10,6 +10,7 @@ use BlueFission\Wise\Usr\Identity;
 use BlueFission\Wise\Cmd\{CommandHandler, CommandProcessor};
 use BlueFission\Wise\Cli\Console;
 use BlueFission\Automata\Language\IInterpreter;
+use BlueFission\Automata\Language\Reader;
 use BlueFission\Async\Async;
 use BlueFission\Data\Storage\Storage;
 use BlueFission\Services\Application as App;
@@ -18,6 +19,8 @@ use BlueFission\Collections\Collection;
 use BlueFission\Behavioral\Behaviors\Event;
 use BlueFission\IPC\IPC;
 use BlueFission\Str;
+use BlueFission\Wise\Usr\Profile;
+use BlueFission\Wise\Sys\Memory\WorkingMemoryCoordinator;
 
 class Kernel {
     use Traits\ManagesFileSystem;
@@ -35,6 +38,10 @@ class Kernel {
     protected $_ipc;
 
     protected $_console;
+
+    protected ?WorkingMemoryCoordinator $_workingMemory = null;
+    protected ?Profile $_profile = null;
+    protected ?Profile $_systemProfile = null;
 
     protected $_async;
     protected $_queue;
@@ -63,6 +70,8 @@ class Kernel {
 
         $this->_commandHandler = new CommandHandler($this);
         $this->_identity = new Identity($this, new Auth( $this->_sessionStorage, $this->_dataStorage ));
+        $this->_profile = $this->_identity->profile();
+        $this->_systemProfile = new Profile('system', ['system']);
 
         self::$_instance = $this;
     }
@@ -112,6 +121,8 @@ class Kernel {
         $request = trim($request);
         // this method shoud determine if a request should be handled by the shell interpreter, the command processor, or directly by the kernel's internal commands
 
+        $this->recordMemory($request);
+
         // Determine if request is a command or a script
         if ($this->_commandHandler->canHandle($request)) {
             $this->handleNative($request);
@@ -120,6 +131,65 @@ class Kernel {
         } else {
             $this->handleCommand($request);
         }
+    }
+
+    public function setWorkingMemory(WorkingMemoryCoordinator $workingMemory): void
+    {
+        $this->_workingMemory = $workingMemory;
+    }
+
+    public function hasWorkingMemory(): bool
+    {
+        return $this->_workingMemory !== null;
+    }
+
+    public function setProfile(Profile $profile): void
+    {
+        $this->_profile = $profile;
+    }
+
+    public function profile(): ?Profile
+    {
+        return $this->_profile;
+    }
+
+    public function setWorkingMemoryMaxSize(string $scope, ?int $size, ?string $ownerId = null): void
+    {
+        if (!$this->_workingMemory) {
+            return;
+        }
+
+        $this->_workingMemory->setPartitionMaxSize($scope, $size, $ownerId);
+    }
+
+    public function workingMemoryMaxSize(string $scope, ?string $ownerId = null): ?int
+    {
+        if (!$this->_workingMemory) {
+            return null;
+        }
+
+        $owner = $ownerId ?? $this->_profile?->id();
+        return $this->_workingMemory->partitionMaxSize($scope, $owner);
+    }
+
+    private function recordMemory(string $request): void
+    {
+        if (!$this->_workingMemory || !$this->_profile || $request === '') {
+            return;
+        }
+
+        $episodeId = 'console:' . bin2hex(random_bytes(6));
+        $this->_workingMemory->record('user', $request, $episodeId, $this->_profile, $this->_profile->id());
+    }
+
+    private function recordMemoryOutput(string $output): void
+    {
+        if (!$this->_workingMemory || !$this->_systemProfile || $output === '') {
+            return;
+        }
+
+        $episodeId = 'console:' . bin2hex(random_bytes(6));
+        $this->_workingMemory->record('global', $output, $episodeId, $this->_systemProfile, $this->_systemProfile->id());
     }
 
     private function execute($request)
@@ -159,6 +229,7 @@ class Kernel {
         } catch (\Exception $e) {
             $response = $e->getMessage();
         }
+        $this->recordMemoryOutput((string)$response);
         $this->_output = $response;
     }
 
@@ -182,6 +253,7 @@ class Kernel {
     private function handleNative($request) {
         $output = $this->_commandHandler->handle($request);
         $this->_console->output($output, 'system');
+        $this->recordMemoryOutput((string)$output);
     }
 
     public function run() {

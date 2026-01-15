@@ -9,6 +9,7 @@ use BlueFission\Data\Storage\Storage;
 use BlueFission\Automata\LLM\Prompts\ConsoleResponse;
 use BlueFission\Automata\LLM\Clients\IClient;
 use BlueFission\Services\Application as App;
+use BlueFission\Wise\Nav\INavigator;
 
 class CommandProcessor
 {
@@ -18,6 +19,7 @@ class CommandProcessor
     protected $_grammar;
     protected $_llmClient;
     protected $_name;
+    protected $_navigator;
 
     protected $_availableCommands = [];
 
@@ -28,7 +30,7 @@ class CommandProcessor
 
     protected $_keywords = [];
 
-    public function __construct(Storage $storage, IClient $llmClient = null)
+    public function __construct(Storage $storage, IClient $llmClient = null, INavigator $navigator = null)
     {
         $this->setKeywords();
         $this->_parser = new CommandParser();
@@ -37,6 +39,7 @@ class CommandProcessor
         $this->_storage->activate();
 
         $this->_llmClient = $llmClient;
+        $this->_navigator = $navigator;
 
         $this->_name = $this->_app->name();
 
@@ -71,7 +74,7 @@ class CommandProcessor
         $input = trim($input);
 
         if (!empty($this->_storage->confirmCmd)) {
-            if (in_array(strtolower($input), $this->responseWords['yes'])) {
+            if (in_array(strtolower($input), $this->_responseWords['yes'], true)) {
                 $command = $this->convertToCommand($this->_storage->confirmCmd);
                 unset($this->_storage->currentCmd);
 
@@ -81,7 +84,7 @@ class CommandProcessor
                 $this->addToHistory($accept);
 
                 $input = "";
-            } elseif (in_array(strtolower($input), $this->responseWords['no'])) {
+            } elseif (in_array(strtolower($input), $this->_responseWords['no'], true)) {
                 $deny = new Command();
                 $deny->args[] = $input;
 
@@ -89,6 +92,8 @@ class CommandProcessor
                 
                 $output = "Command cancelled.";
                 $this->addToLog($output, 'output');
+                unset($this->_storage->confirmCmd);
+                $this->_storage->write();
                 return $output;
             }
             unset($this->_storage->confirmCmd);
@@ -138,8 +143,9 @@ class CommandProcessor
             ];
 
             $inputWithPronouns = $this->_parser->processPronouns($input, $context);
+            $inputForParse = $inputWithPronouns ?: $input;
 
-            $command = $this->_parser->parse($input);
+            $command = $this->_parser->parse($inputForParse);
         }
 
         if (empty($command->resources) && $command->verb == 'help') {
@@ -149,7 +155,7 @@ class CommandProcessor
         }
 
         if (!$command->verb && empty($command->resources)) {
-            $command = $this->_parser->processQuestion($input);
+            $command = $this->_parser->processQuestion($inputForParse ?? $input);
         }
 
         if (!$command || (empty($command->verb) && empty($command->resources))) {
@@ -306,8 +312,11 @@ class CommandProcessor
         }
 
         $error = $this->parseAsStatement($input, $cmd);
+        if (is_string($error) && str_contains($error, 'Unknown nonterminal')) {
+            $error = null;
+        }
 
-        $response = $this->respond($input);
+        $response = $this->respondWithNavigator($input) ?? $this->respond($input);
         
         if (!$response) {
             $this->_storage->errors++;
@@ -447,10 +456,24 @@ class CommandProcessor
 
         if ($highestSimilarity > 50) {
             $responseIndex = array_rand($bestMatch['responses']);
-            return $bestMatch['responses'][$responseIndex];
+            $response = $bestMatch['responses'][$responseIndex];
+            if (is_callable($response)) {
+                return $response();
+            }
+            return $response;
         }
 
         return null;
+    }
+
+    private function respondWithNavigator(string $input): ?string
+    {
+        if (!$this->_navigator) {
+            return null;
+        }
+
+        $response = $this->_navigator->process($input);
+        return $response !== '' ? $response : null;
     }
 
     private function suggestResources($command)
@@ -525,7 +548,7 @@ class CommandProcessor
         ],
         'wellbeing' => [
             'keywords' => ['how are you', 'how is it going', 'what\'s up', 'how do you feel'],
-            'responses' => [(function () {
+            'responses' => [function () {
             $os = PHP_OS_FAMILY;
 
             // Get the number of CPU cores
@@ -556,7 +579,7 @@ class CommandProcessor
             } else {
                 return 'I\'m not sure how I\'m feeling right now. I cannot retrieve system load information.';
             }
-        })(),
+        },
         'I\'m doing well, thank you!', 'I\'m just a program, but I\'m functioning as expected.'],
         ],
         'farewell' => [

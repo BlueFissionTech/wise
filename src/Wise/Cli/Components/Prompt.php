@@ -75,6 +75,7 @@ class Prompt extends Component
     public function setContext(string $path): bool
     {
         $this->_context = $path;
+        return true;
     }
 
     public function getLength(): int

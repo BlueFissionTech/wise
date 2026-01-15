@@ -60,6 +60,7 @@ class CommandHandler {
         $this->registerAlias('echo', 'echo');
         $this->registerAlias('clear', 'clearScreen');
         $this->registerAlias('exit', 'exit');
+        $this->registerAlias('mem', 'memory');
         // Add more aliases as needed
     }
 
@@ -118,9 +119,86 @@ class CommandHandler {
         return '';
     }
 
+    public function memory($scope = null, $size = null)
+    {
+        if (!$this->_kernel->hasWorkingMemory()) {
+            return 'Working memory is not configured.';
+        }
+
+        $scope = $scope ? strtolower($scope) : null;
+        $size = $size !== null ? strtolower((string)$size) : null;
+
+        if ($scope === null || $scope === 'status') {
+            return $this->memoryStatus();
+        }
+
+        if (is_numeric($scope)) {
+            $size = $scope;
+            $scope = 'user';
+        } elseif ($scope === 'max') {
+            $scope = 'user';
+        }
+
+        if (!in_array($scope, ['user', 'global'], true)) {
+            return 'Usage: memory [user|global] [size|off]';
+        }
+
+        if ($scope === 'global' && !$this->canManageGlobalMemory()) {
+            return 'Insufficient permissions to modify global memory.';
+        }
+
+        $parsedSize = $this->parseMemorySize($size);
+        $ownerId = null;
+        if ($scope === 'user') {
+            $ownerId = $this->_kernel->profile()?->id();
+        }
+
+        $this->_kernel->setWorkingMemoryMaxSize($scope, $parsedSize, $ownerId);
+        $current = $this->_kernel->workingMemoryMaxSize($scope, $ownerId);
+        $label = $current !== null ? (string)$current : 'unlimited';
+
+        return "Working memory {$scope} max size set to {$label}.";
+    }
+
     public function exit() {
         exit;
     }
 
     // Add more internal commands as needed
+
+    private function memoryStatus(): string
+    {
+        $userId = $this->_kernel->profile()?->id();
+        $userSize = $this->_kernel->workingMemoryMaxSize('user', $userId);
+        $globalSize = $this->_kernel->workingMemoryMaxSize('global');
+
+        $userLabel = $userSize !== null ? (string)$userSize : 'unlimited';
+        $globalLabel = $globalSize !== null ? (string)$globalSize : 'unlimited';
+
+        return "Working memory max size (user: {$userLabel}, global: {$globalLabel}).";
+    }
+
+    private function canManageGlobalMemory(): bool
+    {
+        $profile = $this->_kernel->profile();
+        if (!$profile) {
+            return false;
+        }
+
+        return $profile->hasRole('admin') || $profile->hasRole('system');
+    }
+
+    private function parseMemorySize(?string $size): ?int
+    {
+        if ($size === null || $size === '' || $size === 'off' || $size === 'none') {
+            return null;
+        }
+
+        if (!is_numeric($size)) {
+            return null;
+        }
+
+        $parsed = (int)$size;
+        return $parsed > 0 ? $parsed : null;
+    }
 }

@@ -2,6 +2,7 @@
 namespace BlueFission\Wise\Cmd;
 
 use BlueFission\Services\Application as App;
+use BlueFission\Str;
 
 // CommandParser.php
 class CommandParser
@@ -144,6 +145,8 @@ class CommandParser
             $command->resources[] = $service;
             $command->verb = $behavior;
             $command->args = $args;
+
+            return $command;
         }
 
         return null;
@@ -342,7 +345,7 @@ class CommandParser
         // }
         foreach ($this->knownResources as $resource)
         {
-            if ($word == pluralize($resource)) {
+            if ($word == Str::pluralize($resource)) {
                 $word = $resource;
                 break;
             }

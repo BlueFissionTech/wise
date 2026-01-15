@@ -24,6 +24,10 @@
         {
             "type": "vcs",
             "url": "https://github.com/bluefission/simpleclients"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/bluefissiontech/synthetiq"
         }
     ],
     "minimum-stability": "dev",
@@ -31,6 +35,7 @@
         "bluefission/develation": "^1.0.0-alpha",
         "bluefission/automata": "dev-master",
         "bluefission/simpleclients": "dev-master",
+        "bluefission/synthetiq": "dev-main",
         "google/cloud-language": "^0.27.0",
         "orhanerday/open-ai": "^2.2"
     },
@@ -58,5 +63,10 @@
         "post-update-cmd": [
             "BlueFission\\Wise\\Installer::postUpdate"
         ]
+    },
+    "config": {
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
     }
 }

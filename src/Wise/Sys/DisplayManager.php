@@ -29,24 +29,24 @@ class DisplayManager {
 		$this->_driver->flush();
 	}
 
-	public function display( $data, $args = [] ) {
-		$arg1 = null;
-		$arg2 = null;
+    public function display( $data, $args = [] ) {
+        $arg1 = null;
+        $arg2 = null;
 
-		if (Arr::isAssoc($args) && Arr::size($args) > 0) {
-			$args = Arr::use();
-			$arg1 = $args->keys()->get(0);
-			$arg2 = $args->get($arg1);
-		} elseif (Arr::isIndexed($args) && Arr::size($args) > 0) {
-			$args = Arr::use();
-			$arg1 = $args->next();
-			$arg2 = $args->next();
-		} else {
-			$arg1 = $args;
-		}
+        if (Arr::isAssoc($args) && Arr::size($args) > 0) {
+            $keys = array_keys($args);
+            $arg1 = $keys[0] ?? null;
+            $arg2 = $arg1 !== null ? ($args[$arg1] ?? null) : null;
+        } elseif (Arr::isIndexed($args) && Arr::size($args) > 0) {
+            $values = array_values($args);
+            $arg1 = $values[0] ?? null;
+            $arg2 = $values[1] ?? null;
+        } elseif (!is_array($args)) {
+            $arg1 = $args;
+        }
 
-		$this->_driver->handle( $data, $arg1, $arg2 );
-	}
+        $this->_driver->handle( $data, $arg1, $arg2 );
+    }
 
 	public function getSize(): array
 	{
