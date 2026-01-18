@@ -215,7 +215,7 @@ class Component implements IDrawable
 
     public function removeChild(IDrawable $child): void
     {
-        $this->_children->filter(fn($c) => $c !== $child);
+        $this->_children = $this->_children->filter(fn($c) => $c !== $child);
         $child->setParent(null);
     }
 

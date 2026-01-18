@@ -76,7 +76,7 @@ class SplashScreen extends Component
         $content .= PHP_EOL;
         $content .= "\033[32mJen\033[0m interpreter running version 0.0.1." . PHP_EOL . PHP_EOL;
 
-        $this->_content->val($content);
+        $this->setContent($content);
     }
     
 }

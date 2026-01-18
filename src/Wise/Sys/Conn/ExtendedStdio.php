@@ -19,6 +19,7 @@ class ExtendedStdio extends Stdio
     private $_pollingScript;
     private $_stdinProcess;
     private $_stdinScript;
+    private bool $_useStdinProxy = false;
 
     /**
      * Constructor that sets the configuration data.
@@ -57,20 +58,23 @@ class ExtendedStdio extends Stdio
             system('stty cbreak');
             system('stty -icanon');
         } elseif ( PHP_OS == 'WINNT' ) {
-            // Allow for non-blocking input on Windows
-            if (! $this->_stdinScript ) {
-                $this->_stdinScript = 'php';
+            $this->_useStdinProxy = getenv('WISE_STDIN_PROXY') === '1';
+            if ($this->_useStdinProxy) {
+                // Optional stdin proxy process for Windows (disabled by default).
+                if (! $this->_stdinScript ) {
+                    $this->_stdinScript = 'php';
+                }
+
+                $this->_stdinProcess = new Process($this->_stdinScript, null, null, [
+                    0 => ["pipe", "r"],  // stdin
+                    1 => ["pipe", "w"],  // stdout
+                    2 => ["pipe", "a"],  // stderr
+                ]);
+
+                $this->_stdinProcess->start();
+
+                stream_set_blocking($this->_stdinProcess->pipes(1), false);
             }
-
-            $this->_stdinProcess = new Process($this->_stdinScript, null, null, [
-                0 => ["pipe", "r"],  // stdin
-                1 => ["pipe", "w"],  // stdout
-                2 => ["pipe", "a"],  // stderr
-            ]);
-
-            $this->_stdinProcess->start();
-
-            stream_set_blocking($this->_stdinProcess->pipes(1), false);
         }
 
         stream_set_blocking(\STDIN, false);
@@ -83,7 +87,18 @@ class ExtendedStdio extends Stdio
      */
     protected function listen()
     {
-        $stdin = (PHP_OS == 'WINNT') ? $this->_stdinProcess->pipes(1) : $this->_connection['in'];
+        $stdin = $this->_connection['in'] ?? STDIN;
+        if ($this->_useStdinProxy && $this->_stdinProcess) {
+            $stdin = $this->_stdinProcess->pipes(1);
+        }
+
+        $this->_result = "";
+
+        if (PHP_OS == 'WINNT') {
+            $this->handleInput($stdin);
+            $this->handlePollingOutput($this->_pollProcess->pipes(1));
+            return;
+        }
 
         $readStreams = [$stdin, $this->_pollProcess->pipes(1)];
         $writeStreams = null;
@@ -91,8 +106,6 @@ class ExtendedStdio extends Stdio
         $timeout = 0; 
 
         $numChangedStreams = stream_select($readStreams, $writeStreams, $exceptStreams, $timeout);
-
-        $this->_result = "";
 
         if ($numChangedStreams === false) {
             // Error occurred during stream_select
@@ -128,9 +141,11 @@ class ExtendedStdio extends Stdio
             return;
         }
 
-        // $data = fgets($stream);
-        // $data = fread($stream, 1);
-        $data = stream_get_line($stream, 1);
+        if (PHP_OS === 'WINNT' && !$this->_useStdinProxy) {
+            $data = fgets($stream);
+        } else {
+            $data = stream_get_line($stream, 1);
+        }
 
         // die($data);
 
@@ -138,6 +153,9 @@ class ExtendedStdio extends Stdio
             $this->_result .= $data;
             $this->dispatch(Event::RECEIVED, new Meta(data: $data));
         } else {
+            if (feof($stream)) {
+                return;
+            }
             $error = "No data received from input before EOF";
             error_log('IO Error: ' . $error);
             $this->perform(Event::ERROR, new Meta(when: Action::PROCESS, info: $error));

@@ -32,6 +32,12 @@ class ConsoleDisplayUtil {
         self::$_cursorPosition = [0, 0]; // Start cursor at the top-left
         list(self::$screenWidth, self::$screenHeight) = self::getTerminalSize();
         self::initializeBuffers(self::$_currentBuffer, self::$_newBuffer, self::$screenWidth, self::$screenHeight);
+
+        if (function_exists('sapi_windows_vt100_support') && strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            @sapi_windows_vt100_support(STDOUT, true);
+            @sapi_windows_vt100_support(STDERR, true);
+            @sapi_windows_vt100_support(STDIN, true);
+        }
     }
 
     public static function update() {
@@ -117,7 +123,14 @@ class ConsoleDisplayUtil {
         self::drawBuffer();
     }
 
-    public static function initializeBuffers() {
+    public static function initializeBuffers($currentBuffer = null, $newBuffer = null, $width = null, $height = null) {
+        if ($width !== null) {
+            self::$screenWidth = (int)$width;
+        }
+        if ($height !== null) {
+            self::$screenHeight = (int)$height;
+        }
+
         self::$_currentBuffer = array_fill(0, self::$screenHeight, str_repeat(' ', self::$screenWidth));
         self::$_newBuffer = array_fill(0, self::$screenHeight, str_repeat(' ', self::$screenWidth));
     }

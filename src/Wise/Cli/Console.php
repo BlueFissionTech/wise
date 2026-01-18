@@ -218,7 +218,9 @@ class Console implements IDispatcher, IBehavioral
 
         // If there is an active cursor drawn to the screen, move the console cursor to that position
         if ($this->_activeCursor) {
-            echo "\033[" . $this->_activeCursor->getAbsoluteY() . ";" . $this->_activeCursor->getAbsoluteX() . "H";
+            $cursorY = $this->_activeCursor->getAbsoluteY() + 1;
+            $cursorX = $this->_activeCursor->getAbsoluteX() + 1;
+            echo "\033[" . $cursorY . ";" . $cursorX . "H";
             // Show the cursor
             echo "\033[?25h";
         }
@@ -333,25 +335,47 @@ class Console implements IDispatcher, IBehavioral
         if ( Str::pos($input, $this->_specialChars->flip()->get('BACKSPACE')) === 0 ) {
             // Handle backspace
             $this->_buffer = Str::use()->sub(0, -1);
-        } elseif ( Str::pos($input, $this->_specialChars->flip()->get('ENTER')) === 0 ) {
-            // Handle enter
-            $this->trigger(Action::PROCESS, new Meta(data: new Data( channel: 'stdio', content: $this->_buffer)));
-            $this->_buffer = '';
-        } elseif ( Str::pos($input, $this->_specialChars->flip()->get('UP')) === 0 ) {
-            // Handle up arrow
-        } elseif ( Str::pos($input, $this->_specialChars->flip()->get('DOWN')) === 0 ) {
-            // Handle down arrow
-        } elseif ( Str::pos($input, $this->_specialChars->flip()->get('RIGHT')) === 0 ) {
-            // Handle right arrow by moving the cursor
-            $this->send("\033[1C");
-        } elseif ( Str::pos($input, $this->_specialChars->flip()->get('LEFT')) === 0 ) {
-            // Handle left arrow by moving the cursor
-            $this->send("\033[1D");
-        } else {
-            $this->_buffer .= $input;
+            $this->trigger(Event::RECEIVED, new Meta(data: new Data( channel: 'stdio', content: $this->_buffer)));
+            return;
         }
 
-        $this->trigger(Event::RECEIVED, new Meta(data: new Data( channel: 'stdio', content: $this->_buffer)));
+        if ( Str::pos($input, $this->_specialChars->flip()->get('UP')) === 0 ) {
+            // Handle up arrow
+            return;
+        }
+
+        if ( Str::pos($input, $this->_specialChars->flip()->get('DOWN')) === 0 ) {
+            // Handle down arrow
+            return;
+        }
+
+        if ( Str::pos($input, $this->_specialChars->flip()->get('RIGHT')) === 0 ) {
+            // Handle right arrow by moving the cursor
+            $this->send("\033[1C");
+            return;
+        }
+
+        if ( Str::pos($input, $this->_specialChars->flip()->get('LEFT')) === 0 ) {
+            // Handle left arrow by moving the cursor
+            $this->send("\033[1D");
+            return;
+        }
+
+        $normalized = str_replace("\r", "\n", $input);
+        $segments = explode("\n", $normalized);
+        $segmentCount = count($segments);
+        foreach ($segments as $index => $segment) {
+            if ($segment !== '') {
+                $this->_buffer .= $segment;
+            }
+
+            $this->trigger(Event::RECEIVED, new Meta(data: new Data( channel: 'stdio', content: $this->_buffer)));
+
+            if ($index < $segmentCount - 1) {
+                $this->trigger(Action::PROCESS, new Meta(data: new Data( channel: 'stdio', content: $this->_buffer)));
+                $this->_buffer = '';
+            }
+        }
     }
 
     public function clear() {

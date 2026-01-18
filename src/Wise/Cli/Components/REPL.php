@@ -114,7 +114,14 @@ class REPL extends Component
     {
         if ($input) {
             $this->_prompt->setActive(false);
-            
+
+            if ($this->_console && $this->_console->getDisplayMode() === Console::DYNAMIC_MODE) {
+                $lines = $this->_prompt->draw();
+                foreach ($lines as $line) {
+                    $this->_textOutput->addLine($line);
+                }
+            }
+
             if ($this->_console) {
                 $this->_console->perform(Event::PROCESSED, new Meta(data: $input));
             }
@@ -125,12 +132,16 @@ class REPL extends Component
 
     public function newPrompt(): void
     {
+        $oldPrompt = $this->_prompt;
+        $oldCursor = $this->_cursor;
+
         $newPrompt = new Prompt(0, $this->getHeight() - 1, $this->getWidth(), '', 1, true);
-        $newCursor = new Cursor($this->_prompt->getLength(), $this->_prompt->getY() - 1, 2);
+        $newCursor = new Cursor($this->_prompt->getLength(), $newPrompt->getY(), 2);
         $this->_prompt = $newPrompt;
         $this->_cursor = $newCursor;
 
-        $this->_textOutput->removeChild($this->_cursor);
+        $this->_textOutput->removeChild($oldCursor);
+        $this->_textOutput->removeChild($oldPrompt);
         $this->_textOutput->addChild($newPrompt);
         $this->_textOutput->addChild($newCursor);
     }

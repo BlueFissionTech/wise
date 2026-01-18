@@ -45,6 +45,12 @@ class TextOutput extends Component
         }
     }
 
+    public function removeChild(IDrawable $child): void
+    {
+        parent::removeChild($child);
+        $this->_needsRedraw = true;
+    }
+
     protected function calculateScrollTop(): int
     {
         if ($this->_lines->size() <= $this->getHeight()) {
@@ -86,16 +92,9 @@ class TextOutput extends Component
     public function draw(): array
     {
         $contents = parent::draw();
+        $this->_lines = Arr::make($contents);
 
         return $contents;
-
-        $this->_lines = Arr::make(explode(PHP_EOL, $contents));
-
-        // Show only the visible portion of contents given the current scrollTop
-        $visibleContent = $this->_lines->slice($this->_scrollTop, $this->needsRedraw() ? $this->getHeight() : null );
-        $this->_content->val(implode(PHP_EOL, $visibleContent));
-
-        return $visibleContent;
     }
 
     public function getCharacterAtPosition(int $x, int $y): string
