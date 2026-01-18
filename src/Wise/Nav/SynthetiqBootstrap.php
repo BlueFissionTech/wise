@@ -3,13 +3,18 @@
 namespace BlueFission\Wise\Nav;
 
 use BlueFission\SynthetIQ\SynthetIQ;
+use BlueFission\SynthetIQ\Memory\MemoryAdapterInterface;
 use BlueFission\Automata\Language\{Interpreter, Grammar, StemmerLemmatizer, Walker};
 use BlueFission\Automata\Analysis\KeywordTopicAnalyzer;
 use BlueFission\Automata\Strategy\NaiveBayesTextClassification;
 
 class SynthetiqBootstrap
 {
-    public static function fromVendorSampleConfigs(?string $basePath = null, ?string $modelPath = null): SynthetiqProxy
+    public static function fromVendorSampleConfigs(
+        ?string $basePath = null,
+        ?string $modelPath = null,
+        ?MemoryAdapterInterface $memoryAdapter = null
+    ): SynthetiqProxy
     {
         $root = dirname(__DIR__, 3);
         $configPath = $basePath ?? $root . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'bluefission' . DIRECTORY_SEPARATOR . 'synthetiq' . DIRECTORY_SEPARATOR . 'sample_configs';
@@ -35,6 +40,7 @@ class SynthetiqBootstrap
             'grammar' => $grammar,
             'tokens' => $tokens,
             'documenter' => $documenter,
+            'memory_adapter' => $memoryAdapter,
             'model_path' => $modelPath ?? $root . DIRECTORY_SEPARATOR . 'artifacts' . DIRECTORY_SEPARATOR . 'models' . DIRECTORY_SEPARATOR . 'synthetiq',
         ]);
     }
@@ -69,6 +75,11 @@ class SynthetiqBootstrap
 
         $analyzer = new KeywordTopicAnalyzer(new NaiveBayesTextClassification, $modelDir);
         $ai = new SynthetIQ($interpreter, $analyzer);
+
+        $memoryAdapter = $config['memory_adapter'] ?? null;
+        if ($memoryAdapter instanceof MemoryAdapterInterface) {
+            $ai->setMemoryAdapter($memoryAdapter);
+        }
 
         self::trainRoutes($ai, $dialogue, $intentBoosts);
 

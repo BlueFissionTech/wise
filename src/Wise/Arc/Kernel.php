@@ -21,6 +21,7 @@ use BlueFission\IPC\IPC;
 use BlueFission\Str;
 use BlueFission\Wise\Usr\Profile;
 use BlueFission\Wise\Sys\Memory\WorkingMemoryCoordinator;
+use BlueFission\Wise\Exe\{BridgeRegistry, BridgeContext};
 
 class Kernel {
     use Traits\ManagesFileSystem;
@@ -42,6 +43,7 @@ class Kernel {
     protected ?WorkingMemoryCoordinator $_workingMemory = null;
     protected ?Profile $_profile = null;
     protected ?Profile $_systemProfile = null;
+    protected ?BridgeRegistry $_bridgeRegistry = null;
 
     protected $_async;
     protected $_queue;
@@ -126,6 +128,8 @@ class Kernel {
         // Determine if request is a command or a script
         if ($this->_commandHandler->canHandle($request)) {
             $this->handleNative($request);
+        } elseif ($path = $this->scriptPathForRequest($request)) {
+            $this->handleScript($path);
         } elseif ($this->_interpreter->isValid($request)) {
             $this->handleScript($request);
         } else {
@@ -141,6 +145,16 @@ class Kernel {
     public function hasWorkingMemory(): bool
     {
         return $this->_workingMemory !== null;
+    }
+
+    public function setBridgeRegistry(BridgeRegistry $registry): void
+    {
+        $this->_bridgeRegistry = $registry;
+    }
+
+    public function bridgeRegistry(): ?BridgeRegistry
+    {
+        return $this->_bridgeRegistry;
     }
 
     public function setProfile(Profile $profile): void
@@ -214,7 +228,28 @@ class Kernel {
     }
 
     public function handleScript($request) {
-        $this->display("Not Implemented");
+        if (!$this->_bridgeRegistry) {
+            $this->_output = "No script bridges configured.";
+            return;
+        }
+
+        $path = is_string($request) ? $request : null;
+        if (!$path || !is_file($path)) {
+            $this->_output = "Script not found.";
+            return;
+        }
+
+        $messages = [];
+        $context = $this->buildBridgeContext($messages);
+        $result = $this->_bridgeRegistry->runFile($path, $context);
+
+        $output = $result->output();
+        if ($output === '' && $messages !== []) {
+            $output = implode(PHP_EOL, $messages);
+        }
+
+        $this->recordMemoryOutput((string)$output);
+        $this->_output = $output;
     }
 
     public function runAsync( $task ){
@@ -302,6 +337,93 @@ class Kernel {
         if (!$this->_identity->isAuthenticated()) {
             exit(0);
         }
+    }
+
+    private function scriptPathForRequest(string $request): ?string
+    {
+        if (!$this->_bridgeRegistry || $request === '') {
+            return null;
+        }
+
+        $path = $request;
+        if (!is_file($path)) {
+            $candidate = getcwd() . DIRECTORY_SEPARATOR . $path;
+            if (is_file($candidate)) {
+                $path = $candidate;
+            } else {
+                return null;
+            }
+        }
+
+        $bridge = $this->_bridgeRegistry->bridgeForFile($path);
+        return $bridge ? $path : null;
+    }
+
+    private function buildBridgeContext(array &$messages): BridgeContext
+    {
+        $resourcePath = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Exe' . DIRECTORY_SEPARATOR . 'resources';
+        $resourceResolver = function (string $key): ?array {
+            $mapFile = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Exe' . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'wise_resources.map';
+            if (!is_file($mapFile)) {
+                return null;
+            }
+
+            $contents = file_get_contents($mapFile);
+            if ($contents === false) {
+                return null;
+            }
+
+            $decoded = json_decode($contents, true);
+            if (!is_array($decoded)) {
+                return null;
+            }
+
+            $resources = $decoded['resources'] ?? [];
+            if (!is_array($resources) || !isset($resources[$key])) {
+                return null;
+            }
+
+            $entry = $resources[$key];
+            if (!is_array($entry)) {
+                return null;
+            }
+
+            $path = (string)($entry['path'] ?? '');
+            $resourceName = '';
+            if (str_starts_with($path, 'wise.resource.')) {
+                $resourceName = substr($path, strlen('wise.resource.'));
+            }
+
+            $resource = $resourceName !== '' ? App::instance()->resolve($resourceName) : null;
+
+            return [
+                'key' => $key,
+                'path' => $path,
+                'type' => $entry['type'] ?? null,
+                'resource' => $resource,
+            ];
+        };
+        $outputHandler = function (string $message) use (&$messages): void {
+            $messages[] = $message;
+        };
+        $promptHandler = function (string $message): string {
+            if ($this->_console) {
+                $this->_console->output($message, 'system');
+                return $this->_console->input();
+            }
+            return '';
+        };
+
+        return new BridgeContext(
+            $this,
+            $this->_console,
+            $_ENV,
+            [$resourcePath],
+            [$resourcePath],
+            $outputHandler,
+            $promptHandler,
+            $resourceResolver
+        );
     }
 
     protected function output() {

@@ -8,27 +8,29 @@ class WorkingMemoryCoordinator
 {
     protected object $_reader;
     protected MemoryPolicy $_policy;
-    protected MemoryPartition $_global;
+    protected IMemoryWorkspace $_global;
     protected array $_users = [];
+    protected $partitionFactory = null;
     protected ?int $_defaultGlobalMaxSize = null;
     protected ?int $_defaultUserMaxSize = null;
 
-    public function __construct(object $reader, ?MemoryPolicy $policy = null)
+    public function __construct(object $reader, ?MemoryPolicy $policy = null, ?callable $partitionFactory = null)
     {
         $this->_reader = $reader;
         $this->_policy = $policy ?? new DefaultMemoryPolicy();
-        $this->_global = new MemoryPartition($reader);
+        $this->partitionFactory = $partitionFactory;
+        $this->_global = $this->makePartition('global', null);
     }
 
-    public function global(): MemoryPartition
+    public function global(): IMemoryWorkspace
     {
         return $this->_global;
     }
 
-    public function user(string $userId): MemoryPartition
+    public function user(string $userId): IMemoryWorkspace
     {
         if (!isset($this->_users[$userId])) {
-            $partition = new MemoryPartition($this->_reader);
+            $partition = $this->makePartition('user', $userId);
             if ($this->_defaultUserMaxSize !== null) {
                 $partition->setMaxSize($this->_defaultUserMaxSize);
             }
@@ -36,6 +38,27 @@ class WorkingMemoryCoordinator
         }
 
         return $this->_users[$userId];
+    }
+
+    public function setPartitionFactory(?callable $factory): void
+    {
+        $this->partitionFactory = $factory;
+    }
+
+    public function setGlobalPartition(IMemoryWorkspace $partition): void
+    {
+        $this->_global = $partition;
+        if ($this->_defaultGlobalMaxSize !== null) {
+            $this->_global->setMaxSize($this->_defaultGlobalMaxSize);
+        }
+    }
+
+    public function setUserPartition(string $userId, IMemoryWorkspace $partition): void
+    {
+        if ($this->_defaultUserMaxSize !== null) {
+            $partition->setMaxSize($this->_defaultUserMaxSize);
+        }
+        $this->_users[$userId] = $partition;
     }
 
     public function setGlobalMaxSize(?int $maxSize): void
@@ -92,12 +115,24 @@ class WorkingMemoryCoordinator
         return true;
     }
 
-    public function memory(string $scope, Profile $actor, ?string $ownerId = null): ?MemoryPartition
+    public function memory(string $scope, Profile $actor, ?string $ownerId = null): ?IMemoryWorkspace
     {
         if (!$this->_policy->canRead($actor, $scope, $ownerId)) {
             return null;
         }
 
         return $scope === 'global' ? $this->global() : $this->user($ownerId ?? $actor->id());
+    }
+
+    protected function makePartition(string $scope, ?string $ownerId): IMemoryWorkspace
+    {
+        if ($this->partitionFactory) {
+            $partition = call_user_func($this->partitionFactory, $this->_reader, $scope, $ownerId);
+            if ($partition instanceof IMemoryWorkspace) {
+                return $partition;
+            }
+        }
+
+        return new MemoryPartition($this->_reader);
     }
 }

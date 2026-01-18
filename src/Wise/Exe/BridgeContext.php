@@ -2,10 +2,13 @@
 
 namespace BlueFission\Wise\Exe;
 
+use BlueFission\Behavioral\Behaviors\Event;
+use BlueFission\Behavioral\Behaviors\Meta;
+use BlueFission\Obj;
 use BlueFission\Wise\Arc\Kernel;
 use BlueFission\Wise\Cli\Console;
 
-class BridgeContext
+class BridgeContext extends Obj
 {
     private ?Kernel $kernel;
     private ?Console $console;
@@ -28,6 +31,7 @@ class BridgeContext
         $resourceResolver = null,
         $llm = null
     ) {
+        parent::__construct();
         $this->kernel = $kernel;
         $this->console = $console;
         $this->env = $env;
@@ -77,18 +81,25 @@ class BridgeContext
     {
         if (is_callable($this->outputHandler)) {
             call_user_func($this->outputHandler, $message);
+            $this->dispatch(Event::SENT, new Meta(data: ['message' => $message], src: $this));
             return;
         }
 
         if ($this->console) {
             $this->console->output($message, 'system');
+            $this->dispatch(Event::SENT, new Meta(data: ['message' => $message], src: $this));
         }
     }
 
     public function prompt(string $message): string
     {
         if (is_callable($this->promptHandler)) {
-            return (string)call_user_func($this->promptHandler, $message);
+            $response = (string)call_user_func($this->promptHandler, $message);
+            $this->dispatch(Event::MESSAGE, new Meta(data: [
+                'message' => $message,
+                'response' => $response,
+            ], src: $this));
+            return $response;
         }
 
         return '';

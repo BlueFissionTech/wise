@@ -3,9 +3,10 @@
 namespace BlueFission\Wise\Sys\Memory;
 
 use BlueFission\Automata\Comprehension\Holoscene;
+use BlueFission\Automata\Context;
 use BlueFission\Automata\Memory\Abs2Memory;
 
-class MemoryPartition
+class MemoryPartition implements IMemoryWorkspace
 {
     protected object $_reader;
     protected Abs2Memory $_memory;
@@ -28,6 +29,12 @@ class MemoryPartition
     {
         $statements = $this->_reader->readDocument($text);
         $this->_reader->toHoloscene($statements, $this->_holoscene, $this->_memory, $episodeId);
+        $this->applyRetention();
+    }
+
+    public function recordContext(Context $context, string $label, array $edges = []): void
+    {
+        $this->_memory->addMemory($label, $context, $edges);
         $this->applyRetention();
     }
 

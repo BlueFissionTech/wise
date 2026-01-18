@@ -1,7 +1,11 @@
 <?php
 namespace BlueFission\Wise\Res;
 
+use BlueFission\Behavioral\Behaviors\Event;
+use BlueFission\Behavioral\Behaviors\Meta;
+use BlueFission\DevElation as Dev;
 use BlueFission\Services\Service;
+use BlueFission\Str;
 
 abstract class BaseResource extends Service {
     protected $_entries = [];
@@ -20,6 +24,17 @@ abstract class BaseResource extends Service {
     protected $_listAccessCommand;
     protected $_helpDetails = [];
     protected $_actions = ['list','show','next','previous','do','make','generate','delete','help'];
+    protected const OUTPUT_EVENT = 'wise.resource.output';
+    protected const OUTPUT_REFRESH_EVENT = 'wise.resource.output.refresh';
+    protected const WAITING_EVENT = 'wise.resource.waiting';
+    protected array $_expectedOptions = [];
+    protected array $_expectedOptionsMeta = [];
+    protected array $_outputMeta = [];
+    protected ?string $_lastOutputHash = null;
+    protected ?string $_lastOptionsHash = null;
+    protected int $_outputPreviewLines = 3;
+    protected int $_outputPreviewChars = 240;
+    protected int $_outputFullMax = 2000;
 
 	public function __construct( )
 	{
@@ -43,6 +58,7 @@ abstract class BaseResource extends Service {
 
     public function handle($behavior, $args)
     {
+        $this->resetOutputTracking();
         $action = $behavior->name();
 
         $actions = [];
@@ -55,6 +71,8 @@ abstract class BaseResource extends Service {
             $response .= $this->help();
             
             $this->_response = $response;
+            $this->emitOutputEventIfNeeded();
+            $this->emitWaitingEventIfNeeded();
             return;
         }
 
@@ -112,6 +130,9 @@ abstract class BaseResource extends Service {
                 $this->_response = $this->help();
                 break;
         }
+
+        $this->emitOutputEventIfNeeded();
+        $this->emitWaitingEventIfNeeded();
     }
 
     protected function create($args)
@@ -243,6 +264,7 @@ abstract class BaseResource extends Service {
         } else {
             $response = $this->mainList($args);
         }
+        $this->setExpectedOptions($this->defaultListOptions($args), ['source' => 'list']);
         $this->_response = $response;
 	}
 
@@ -793,13 +815,244 @@ abstract class BaseResource extends Service {
 
     public function pluralize($text)
     {
-        return (!empty($this->_plural) && $text == $this->_name) ? $this->_plural : pluralize($text);
+        return (!empty($this->_plural) && $text == $this->_name) ? $this->_plural : Str::pluralize($text);
     }
 
     public function article($text)
     {
         $a = (in_array(substr($text, 0, 1), ['a', 'e', 'i', 'o', 'u']) ? 'an' : 'a');
         return $a;
+    }
+
+    /**
+     * Provide additional metadata (styles, highlights, transcripts) for output events.
+     *
+     * Override or call this in resource subclasses when emitting colored/structured output
+     * so that listeners (LLMs/agents) can reconstruct the view or extract intent-ready data.
+     */
+    protected function setOutputMeta(array $meta): void
+    {
+        $this->_outputMeta = $meta;
+    }
+
+    protected function mergeOutputMeta(array $meta): void
+    {
+        $this->_outputMeta = array_merge($this->_outputMeta, $meta);
+    }
+
+    /**
+     * Set expected options to emit when the console is awaiting input.
+     *
+     * These are surfaced as a waiting-state event exactly once per output,
+     * so dynamic display refreshes don't spam listeners.
+     */
+    protected function setExpectedOptions(array|string $options, array $meta = []): void
+    {
+        $options = is_array($options) ? $options : [$options];
+        $normalized = [];
+        foreach ($options as $option) {
+            $option = trim((string)$option);
+            if ($option === '') {
+                continue;
+            }
+            $normalized[$option] = true;
+        }
+
+        $this->_expectedOptions = array_keys($normalized);
+        $this->_expectedOptionsMeta = $meta;
+    }
+
+    protected function clearExpectedOptions(): void
+    {
+        $this->_expectedOptions = [];
+        $this->_expectedOptionsMeta = [];
+    }
+
+    protected function resetOutputTracking(): void
+    {
+        $this->_outputMeta = [];
+        $this->clearExpectedOptions();
+    }
+
+    /**
+     * Emit a single output-change event with a truncated preview, plus optional markdown.
+     *
+     * Listeners can use this to capture the first screen-visible lines without
+     * subscribing to every dynamic screen redraw.
+     */
+    protected function emitOutputEventIfNeeded(?string $output = null): void
+    {
+        $output = $output ?? $this->_response ?? '';
+        if (!is_string($output) || $output === '') {
+            return;
+        }
+
+        $hash = sha1($output);
+        if ($hash === $this->_lastOutputHash) {
+            $this->emitOutputRefreshEvent($output);
+            return;
+        }
+        $this->_lastOutputHash = $hash;
+
+        $preview = $this->buildOutputPreview($output);
+        $markdown = Dev::apply('wise.resource.output.markdown', $preview['text']);
+
+        $payload = array_merge([
+            'resource' => $this->_name,
+            'output' => $preview['text'],
+            'lines' => $preview['lines'],
+            'truncated' => $preview['truncated'],
+            'length' => strlen($output),
+            'markdown' => $markdown,
+            'hash' => $hash,
+        ], $this->buildFullOutputMeta($output), $this->_outputMeta);
+
+        $payload = Dev::apply('wise.resource.output.meta', $payload);
+
+        $this->dispatch(self::OUTPUT_EVENT, new Meta(data: $payload, src: $this));
+        $this->dispatch(Event::CHANGE, new Meta(data: $payload, src: $this));
+        Dev::do('wise.resource.output.changed', $payload);
+    }
+
+    /**
+     * Emit a lightweight refresh signal when the output hasn't changed.
+     *
+     * This is lower priority than the unique output event but lets observers
+     * detect re-renders or repeated command output.
+     */
+    protected function emitOutputRefreshEvent(string $output): void
+    {
+        $preview = $this->buildOutputPreview($output);
+        $payload = array_merge([
+            'resource' => $this->_name,
+            'output' => $preview['text'],
+            'lines' => $preview['lines'],
+            'truncated' => $preview['truncated'],
+            'length' => strlen($output),
+        ], $this->buildFullOutputMeta($output), $this->_outputMeta);
+
+        $payload = Dev::apply('wise.resource.output.refresh.meta', $payload);
+
+        $this->dispatch(self::OUTPUT_REFRESH_EVENT, new Meta(data: $payload, src: $this));
+        Dev::do('wise.resource.output.refresh', $payload);
+    }
+
+    /**
+     * Emit a waiting-state event once per output to advertise default options.
+     *
+     * Options can be explicitly set via setExpectedOptions() or auto-extracted
+     * from bracketed lists in the response.
+     */
+    protected function emitWaitingEventIfNeeded(?string $output = null): void
+    {
+        $output = $output ?? $this->_response ?? '';
+        if (!is_string($output) || $output === '') {
+            return;
+        }
+
+        $options = $this->_expectedOptions;
+        if ($options === []) {
+            $options = $this->extractOptionsFromResponse($output);
+        }
+
+        if ($options === []) {
+            return;
+        }
+
+        $hash = sha1(implode('|', $options) . '|' . $output);
+        if ($hash === $this->_lastOptionsHash) {
+            return;
+        }
+        $this->_lastOptionsHash = $hash;
+
+        $payload = array_merge([
+            'resource' => $this->_name,
+            'state' => 'waiting',
+            'options' => $options,
+        ], $this->_expectedOptionsMeta);
+
+        $payload = Dev::apply('wise.resource.waiting.meta', $payload);
+
+        $this->dispatch(self::WAITING_EVENT, new Meta(data: $payload, src: $this));
+        $this->dispatch(Event::STATE_CHANGED, new Meta(data: $payload, src: $this));
+        Dev::do('wise.resource.waiting', $payload);
+    }
+
+    protected function buildOutputPreview(string $output): array
+    {
+        $normalized = str_replace(["\r\n", "\r"], "\n", $output);
+        $lines = preg_split('/\n/', $normalized);
+        if (!is_array($lines) || $lines === []) {
+            $lines = [$output];
+        }
+
+        $previewLines = array_slice($lines, 0, $this->_outputPreviewLines);
+        $previewText = implode(PHP_EOL, $previewLines);
+        $truncated = count($lines) > $this->_outputPreviewLines;
+
+        if (strlen($previewText) > $this->_outputPreviewChars) {
+            $previewText = substr($previewText, 0, $this->_outputPreviewChars);
+            $truncated = true;
+        }
+
+        $previewText = Dev::apply('wise.resource.output.preview', $previewText);
+
+        return [
+            'text' => $previewText,
+            'lines' => $previewLines,
+            'truncated' => $truncated,
+        ];
+    }
+
+    protected function buildFullOutputMeta(string $output): array
+    {
+        if (strlen($output) <= $this->_outputFullMax) {
+            return ['full_output' => $output];
+        }
+
+        return [];
+    }
+
+    protected function extractOptionsFromResponse(string $response): array
+    {
+        if (!preg_match('/\[(.*?)\]/', $response, $matches)) {
+            return [];
+        }
+
+        $raw = $matches[1] ?? '';
+        $parts = preg_split('/,|\bor\b/i', $raw);
+        if (!is_array($parts)) {
+            return [];
+        }
+
+        $options = [];
+        foreach ($parts as $part) {
+            $part = trim($part, " \t\n\r\0\x0B\"");
+            if ($part === '') {
+                continue;
+            }
+            $options[$part] = true;
+        }
+
+        return array_keys($options);
+    }
+
+    protected function defaultListOptions(array $args): array
+    {
+        $plural = $this->pluralize($this->_name);
+        $options = [
+            "previous {$plural}",
+            "next {$plural}",
+            "help with {$plural}",
+        ];
+
+        if (count($args) > 0 && !is_numeric($args[0])) {
+            $listName = (string)$args[0];
+            $options[] = "previous {$this->_name} {$listName}";
+            $options[] = "next {$this->_name} {$listName}";
+        }
+
+        return $options;
     }
 
     private $_verbs = [

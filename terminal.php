@@ -19,7 +19,9 @@ use BlueFission\Wise\Nav\SynthetiqBootstrap;
 use BlueFission\Wise\Cli\Console;
 use BlueFission\Wise\Cli\Components;
 use BlueFission\Wise\Sys\Memory\WorkingMemoryCoordinator;
+use BlueFission\Wise\Sys\Memory\SynthetiqMemoryAdapter;
 use BlueFission\Wise\Usr\Profile;
+use BlueFission\Wise\Exe\{BridgeRegistry, JenssBridge, VibeBridge};
 use BlueFission\Async\{Heap, Thread, Fork};
 use BlueFission\Data\Storage\{Disk, Memory, SQLite};
 use BlueFission\Automata\Language\{
@@ -67,11 +69,15 @@ $console->setDisplayMode(Console::STATIC_MODE);
 // $console->setDisplayMode(Console::DYNAMIC_MODE);
 
 $grammarRules = [];
+$workingMemory = new WorkingMemoryCoordinator(
+    new Reader(new Grammar(new StemmerLemmatizer(), $grammarRules), new Documenter())
+);
+$memoryAdapter = new SynthetiqMemoryAdapter($workingMemory, new Profile('system', ['system']));
 
 // Create and initialize the kernel
 $navigator = null;
 try {
-    $navigator = SynthetiqBootstrap::fromVendorSampleConfigs();
+    $navigator = SynthetiqBootstrap::fromVendorSampleConfigs(null, null, $memoryAdapter);
 } catch (\Throwable $e) {
     $navigator = null;
 }
@@ -88,9 +94,10 @@ $kernel = new Kernel(
     new IPC(new Memory())
 );
 
-$workingMemory = new WorkingMemoryCoordinator(
-    new Reader(new Grammar(new StemmerLemmatizer(), $grammarRules), new Documenter())
-);
+$bridgeRegistry = new BridgeRegistry();
+$bridgeRegistry->register(new JenssBridge());
+$bridgeRegistry->register(new VibeBridge());
+$kernel->setBridgeRegistry($bridgeRegistry);
 
 $kernel->setWorkingMemory($workingMemory);
 $kernel->setProfile(new Profile(getenv('WISE_PROFILE_ID') ?: 'console', ['user']));

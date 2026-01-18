@@ -2,7 +2,9 @@
 
 namespace BlueFission\Wise\Exe;
 
-class BridgeResult
+use BlueFission\Obj;
+
+class BridgeResult extends Obj
 {
     private bool $success;
     private string $output;
@@ -10,6 +12,7 @@ class BridgeResult
 
     public function __construct(bool $success, string $output = '', array $meta = [])
     {
+        parent::__construct();
         $this->success = $success;
         $this->output = $output;
         $this->meta = $meta;
