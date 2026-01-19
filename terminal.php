@@ -38,6 +38,7 @@ use BlueFission\IPC\IPC;
 use BlueFission\Data\Queues\MemQueue;
 
 require 'vendor/autoload.php';
+require_once __DIR__ . '/src/Wise/Support/store.php';
 
 // ini_set('display_errors', 1);
 // ini_set('display_startup_errors', 1);
@@ -46,6 +47,15 @@ require 'vendor/autoload.php';
 mb_internal_encoding("UTF-8");
 
 MemQueue::setMode(MemQueue::FIFO);
+
+$displayMode = getenv('WISE_DISPLAY_MODE');
+$displayMode = $displayMode ? strtolower(trim($displayMode)) : 'dynamic';
+if (getenv('WISE_STDIN_BLOCKING') === false && $displayMode === 'dynamic') {
+    putenv('WISE_STDIN_BLOCKING=0');
+}
+if (getenv('WISE_TTY_ECHO') === false && $displayMode === 'dynamic' && PHP_OS === 'Linux') {
+    putenv('WISE_TTY_ECHO=0');
+}
 
 // Handle IO
 $stdio = (new ExtendedStdio('php stdin.php', 'php polling.php'))->open();
@@ -65,8 +75,7 @@ $console = new Console(
     new KeyInputManager()
 );
 $console->addComponent($screen);
-$console->setDisplayMode(Console::STATIC_MODE);
-// $console->setDisplayMode(Console::DYNAMIC_MODE);
+$console->setDisplayMode($displayMode === 'static' ? Console::STATIC_MODE : Console::DYNAMIC_MODE);
 
 $grammarRules = [];
 $workingMemory = new WorkingMemoryCoordinator(

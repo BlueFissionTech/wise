@@ -25,10 +25,9 @@ class REPL extends Component
             $this->addContent($content);
         }
 
-        $this->_textOutput->addChild($this->_prompt);
-        $this->_textOutput->addChild($this->_cursor);
-
         $this->addChild($this->_textOutput);
+        $this->addChild($this->_prompt);
+        $this->addChild($this->_cursor);
     }
 
     public function addContent(string|Str|Component $content) {
@@ -99,6 +98,9 @@ class REPL extends Component
         }
 
         $this->setDimensions($newWidth, $newHeight);
+        $this->_textOutput->setDimensions($newWidth, max(1, $newHeight - 1));
+        $this->_prompt->setDimensions($newWidth, 1);
+        $this->_prompt->setY($newHeight - 1);
         $this->_cursor->setPosition($this->_prompt->getLength(), $this->_prompt->getY());
         parent::update();
     }
@@ -107,6 +109,7 @@ class REPL extends Component
     {
         if ($input) {
             $this->updatePromptContent($input);
+            $this->_cursor->setPosition($this->_prompt->getLength(), $this->_prompt->getY());
         }
     }
 
@@ -132,17 +135,8 @@ class REPL extends Component
 
     public function newPrompt(): void
     {
-        $oldPrompt = $this->_prompt;
-        $oldCursor = $this->_cursor;
-
-        $newPrompt = new Prompt(0, $this->getHeight() - 1, $this->getWidth(), '', 1, true);
-        $newCursor = new Cursor($this->_prompt->getLength(), $newPrompt->getY(), 2);
-        $this->_prompt = $newPrompt;
-        $this->_cursor = $newCursor;
-
-        $this->_textOutput->removeChild($oldCursor);
-        $this->_textOutput->removeChild($oldPrompt);
-        $this->_textOutput->addChild($newPrompt);
-        $this->_textOutput->addChild($newCursor);
+        $this->_prompt->updateContent('');
+        $this->_prompt->setActive(true);
+        $this->_cursor->setPosition($this->_prompt->getLength(), $this->_prompt->getY());
     }
 }

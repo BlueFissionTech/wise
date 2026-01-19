@@ -11,6 +11,7 @@ class SplashScreen extends Component
     use Traits\Glitches;
 
     protected string $_splashData;
+    protected bool $_asciiSplash = false;
     protected static int $_lastGlitch = 0;
     protected $_firstDisplayTime;
 
@@ -23,6 +24,20 @@ class SplashScreen extends Component
 
     protected function splashData()
     {
+        $style = strtolower((string)getenv('WISE_SPLASH_STYLE'));
+        $useAscii = $style === 'ascii' || (PHP_OS === 'WINNT' && $style !== 'full');
+        $this->_asciiSplash = $useAscii;
+
+        if ($useAscii) {
+            $this->_splashData = "
+ __        ___ ____  _____
+ \\ \\      / / |  _ \\| ____|
+  \\ \\ /\\ / /| | |_) |  _|
+   \\ V  V / | |  __/| |___
+    \\_/\\_/  |_|_|   |_____|";
+            return;
+        }
+
         $this->_splashData = "
             ██╗    ██╗██╗███████╗███████╗
             ██║    ██║██║██╔════╝██╔════╝
@@ -35,6 +50,9 @@ class SplashScreen extends Component
     public function update(): void
     {
         $this->splash();
+        if (!$this->_firstDisplayTime || (time() - $this->_firstDisplayTime) <= 60) {
+            $this->_needsRedraw = true;
+        }
     }
 
     public function draw(): array
@@ -46,7 +64,7 @@ class SplashScreen extends Component
             $this->_needsRedraw = false;
         }
 
-        return explode(PHP_EOL, $this->_content->val());
+        return preg_split("/\r?\n/", $this->_content->val());
     }
 
     public function splash()
@@ -62,7 +80,7 @@ class SplashScreen extends Component
             $this->glitch($this->_splashData, [$effect => true]);
             self::$_lastGlitch = time();
         } else {
-            $splash = explode(PHP_EOL, $this->_splashData);
+            $splash = preg_split("/\r?\n/", $this->_splashData);
             foreach ($splash as $line => $data) {
                 $splash[$line] = "\033[37m{$data}\033[0m";
             }

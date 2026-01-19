@@ -57,6 +57,19 @@ class ExtendedStdio extends Stdio
         if ( PHP_OS == 'Linux' ) {
             system('stty cbreak');
             system('stty -icanon');
+            $echo = getenv('WISE_TTY_ECHO');
+            if ($echo === '0') {
+                system('stty -echo');
+            } elseif ($echo !== false) {
+                system('stty echo');
+            }
+
+            register_shutdown_function(static function (): void {
+                if (PHP_OS === 'Linux') {
+                    system('stty echo');
+                    system('stty icanon');
+                }
+            });
         } elseif ( PHP_OS == 'WINNT' ) {
             $this->_useStdinProxy = getenv('WISE_STDIN_PROXY') === '1';
             if ($this->_useStdinProxy) {
@@ -77,7 +90,25 @@ class ExtendedStdio extends Stdio
             }
         }
 
-        stream_set_blocking(\STDIN, false);
+        if (PHP_OS == 'WINNT') {
+            $blocking = filter_var(getenv('WISE_STDIN_BLOCKING') ?: '1', FILTER_VALIDATE_BOOLEAN);
+            stream_set_blocking(\STDIN, $blocking);
+        } else {
+            stream_set_blocking(\STDIN, false);
+        }
+    }
+
+    protected function _open(): void
+    {
+        parent::_open();
+
+        if (PHP_OS === 'WINNT') {
+            $blocking = filter_var(getenv('WISE_STDIN_BLOCKING') ?: '1', FILTER_VALIDATE_BOOLEAN);
+            if (isset($this->_connection['in']) && is_resource($this->_connection['in'])) {
+                stream_set_blocking($this->_connection['in'], $blocking);
+            }
+            stream_set_blocking(\STDIN, $blocking);
+        }
     }
 
     /**
@@ -142,23 +173,21 @@ class ExtendedStdio extends Stdio
         }
 
         if (PHP_OS === 'WINNT' && !$this->_useStdinProxy) {
-            $data = fgets($stream);
+            $data = $this->readWindowsInput($stream);
         } else {
             $data = stream_get_line($stream, 1);
         }
 
         // die($data);
 
-        if ($data !== false) {
+        if ($data !== false && $data !== '') {
             $this->_result .= $data;
             $this->dispatch(Event::RECEIVED, new Meta(data: $data));
         } else {
             if (feof($stream)) {
                 return;
             }
-            $error = "No data received from input before EOF";
-            error_log('IO Error: ' . $error);
-            $this->perform(Event::ERROR, new Meta(when: Action::PROCESS, info: $error));
+            return;
         }
     }
 
@@ -183,6 +212,19 @@ class ExtendedStdio extends Stdio
             error_log('IO Error: ' . $error);
             $this->perform(Event::ERROR, new Meta(when: Action::PROCESS, info: $error));
         }
+    }
+
+    private function readWindowsInput($stream)
+    {
+        $meta = stream_get_meta_data($stream);
+        $blocked = $meta['blocked'] ?? null;
+
+        if ($blocked) {
+            return fgets($stream);
+        }
+
+        $data = fread($stream, 8192);
+        return $data === '' ? false : $data;
     }
 
     /**

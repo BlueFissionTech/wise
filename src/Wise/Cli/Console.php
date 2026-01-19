@@ -221,8 +221,12 @@ class Console implements IDispatcher, IBehavioral
             $cursorY = $this->_activeCursor->getAbsoluteY() + 1;
             $cursorX = $this->_activeCursor->getAbsoluteX() + 1;
             echo "\033[" . $cursorY . ";" . $cursorX . "H";
-            // Show the cursor
-            echo "\033[?25h";
+            // Show the cursor only in static mode to avoid double cursors in dynamic draws.
+            if ($this->getDisplayMode() === self::STATIC_MODE) {
+                echo "\033[?25h";
+            } else {
+                echo "\033[?25l";
+            }
         }
 
         $this->_content = [];
@@ -334,7 +338,7 @@ class Console implements IDispatcher, IBehavioral
 
         if ( Str::pos($input, $this->_specialChars->flip()->get('BACKSPACE')) === 0 ) {
             // Handle backspace
-            $this->_buffer = Str::use()->sub(0, -1);
+            $this->_buffer = Str::sub($this->_buffer, 0, -1);
             $this->trigger(Event::RECEIVED, new Meta(data: new Data( channel: 'stdio', content: $this->_buffer)));
             return;
         }

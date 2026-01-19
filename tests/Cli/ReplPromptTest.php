@@ -13,19 +13,20 @@ final class ReplPromptTest extends TestCase
 
         $textOutput = $this->getProperty($repl, '_textOutput');
         $children = $textOutput->getChildren();
-        $this->assertSame(2, $children->count());
+        $initialCount = $children->count();
 
         $repl->newPrompt();
         $childrenAfterFirst = $textOutput->getChildren();
-        $this->assertSame(2, $childrenAfterFirst->count());
+        $this->assertSame($initialCount, $childrenAfterFirst->count());
 
         $repl->newPrompt();
         $childrenAfterSecond = $textOutput->getChildren();
-        $this->assertSame(2, $childrenAfterSecond->count());
+        $this->assertSame($initialCount, $childrenAfterSecond->count());
 
         $prompt = $this->getProperty($repl, '_prompt');
         $cursor = $this->getProperty($repl, '_cursor');
         $this->assertSame($prompt->getY(), $cursor->getY());
+        $this->assertSame($repl->getHeight() - 1, $prompt->getY());
     }
 
     private function getProperty(object $object, string $name)

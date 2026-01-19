@@ -115,7 +115,7 @@ final class CliComponentsTest extends TestCase
 
         $after = $promptProperty->getValue($repl);
 
-        $this->assertNotSame($before, $after);
+        $this->assertSame($before, $after);
         $this->assertInstanceOf(Prompt::class, $after);
         $this->assertTrue($after->getActive());
     }

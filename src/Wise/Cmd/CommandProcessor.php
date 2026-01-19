@@ -183,6 +183,33 @@ class CommandProcessor
             return $output;
         }
 
+        if (!$this->resourceExists($command->resources[0])) {
+            if ($this->isSameCommand($command, 4)) {
+                unset($this->_storage->currentCmd);
+                $this->_storage->confirmCmd = $command;
+                $this->_storage->write();
+                $output = "You've submitted this command over 3 times in a row. Are you sure you want to run it again? [yes/no]";
+                $this->addToLog($output, 'output');
+                return $output;
+            }
+
+            $this->_storage->lastResource = $command->resources[0];
+            $this->_storage->lastVerb = $command->verb;
+            $this->_storage->write();
+
+            if ($this->shouldUseNavigator($input)) {
+                $response = $this->respondWithNavigator($input) ?? $this->respond($input);
+                if ($response) {
+                    $this->addToLog($response, 'output');
+                    return $response;
+                }
+            }
+
+            $output = 'Resource not found';
+            $this->addToLog($output, 'output');
+            return $output;
+        }
+
         unset($this->_storage->currentCmd);
         $this->_storage->write();
 
@@ -487,6 +514,26 @@ class CommandProcessor
             default:
                 return "No registered resource specified in the command. Which resource do you want to {$command->verb} using?";
         }
+    }
+
+    private function resourceExists(string $resource): bool
+    {
+        $abilities = $this->_app->getAbilities();
+        return isset($abilities[$resource]);
+    }
+
+    private function shouldUseNavigator(string $input): bool
+    {
+        $trimmed = trim($input);
+        if ($trimmed === '') {
+            return false;
+        }
+
+        if (str_ends_with($trimmed, '?')) {
+            return true;
+        }
+
+        return (bool)preg_match('/^(who|what|where|when|why|how)\\b/i', $trimmed);
     }
 
     private function conversationalResponse( $input )

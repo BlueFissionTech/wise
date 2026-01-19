@@ -130,8 +130,8 @@ class Kernel {
             $this->handleNative($request);
         } elseif ($path = $this->scriptPathForRequest($request)) {
             $this->handleScript($path);
-        } elseif ($this->_interpreter->isValid($request)) {
-            $this->handleScript($request);
+        } elseif ($this->shouldUseInterpreter($request)) {
+            $this->handleInterpreter($request);
         } else {
             $this->handleCommand($request);
         }
@@ -337,6 +337,60 @@ class Kernel {
         if (!$this->_identity->isAuthenticated()) {
             exit(0);
         }
+    }
+
+    private function handleInterpreter(string $request): void
+    {
+        if (!$this->_interpreter) {
+            $this->_output = 'Interpreter not configured.';
+            return;
+        }
+
+        $code = $this->stripInterpreterPrefix($request);
+        if ($code === '') {
+            $this->_output = 'No script provided.';
+            return;
+        }
+
+        if (!$this->_interpreter->isValid($code)) {
+            $this->_output = 'Invalid script.';
+            return;
+        }
+
+        try {
+            $this->_interpreter->run($code);
+            $this->_output = 'Script executed.';
+        } catch (\Throwable $e) {
+            $this->_output = $e->getMessage();
+        }
+
+        $this->recordMemoryOutput((string)$this->_output);
+    }
+
+    private function shouldUseInterpreter(string $request): bool
+    {
+        $trimmed = ltrim($request);
+        if ($trimmed === '') {
+            return false;
+        }
+
+        $prefix = getenv('WISE_INTERPRETER_PREFIX');
+        $prefix = $prefix !== false && $prefix !== '' ? $prefix : '::';
+
+        return str_starts_with($trimmed, $prefix);
+    }
+
+    private function stripInterpreterPrefix(string $request): string
+    {
+        $trimmed = ltrim($request);
+        $prefix = getenv('WISE_INTERPRETER_PREFIX');
+        $prefix = $prefix !== false && $prefix !== '' ? $prefix : '::';
+
+        if ($prefix !== '' && str_starts_with($trimmed, $prefix)) {
+            return ltrim(substr($trimmed, strlen($prefix)));
+        }
+
+        return $trimmed;
     }
 
     private function scriptPathForRequest(string $request): ?string

@@ -4,6 +4,8 @@ namespace BlueFission\Wise\Cmd;
 
 use BlueFission\Wise\Arc\Kernel;
 use BlueFission\Data\FileSystem;
+use BlueFission\Wise\Res\ResourceHelper;
+use BlueFission\Behavioral\Behaviors\Behavior;
 
 class CommandHandler {
     protected $_aliases = [];
@@ -65,7 +67,12 @@ class CommandHandler {
     }
 
     // Define internal commands
-    public function listDir($dir = null) {
+    public function listDir(...$args) {
+        if ($this->isResourceCommand($args)) {
+            return $this->dispatchResourceHelper('list', $this->extractResourceArgs($args));
+        }
+
+        $dir = $args[0] ?? null;
         return $this->_kernel->listDir($dir);
     }
 
@@ -89,7 +96,12 @@ class CommandHandler {
         return $this->_kernel->deleteFile($file);
     }
 
-    public function readFile($file) {
+    public function readFile(...$args) {
+        if ($this->isResourceCommand($args)) {
+            return $this->dispatchResourceHelper('show', $this->extractResourceArgs($args));
+        }
+
+        $file = $args[0] ?? null;
         return $this->_kernel->readFile($file);
     }
 
@@ -105,7 +117,11 @@ class CommandHandler {
         return $message;
     }
 
-    public function help() {
+    public function help(...$args) {
+        if ($this->isResourceCommand($args)) {
+            return $this->dispatchResourceHelper('help', $this->extractResourceArgs($args));
+        }
+
         return "Available commands: list (ls), changeDirectory (cd), delete (rm), view (cat), echo";
     }
 
@@ -200,5 +216,40 @@ class CommandHandler {
 
         $parsed = (int)$size;
         return $parsed > 0 ? $parsed : null;
+    }
+
+    private function isResourceCommand(array $args): bool
+    {
+        foreach ($args as $arg) {
+            $value = strtolower((string)$arg);
+            if ($value === 'resource' || $value === 'resources') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function extractResourceArgs(array $args): array
+    {
+        $filtered = [];
+        foreach ($args as $arg) {
+            $value = strtolower((string)$arg);
+            if ($value === 'resource' || $value === 'resources' || $value === 'all') {
+                continue;
+            }
+            $filtered[] = $arg;
+        }
+
+        return $filtered;
+    }
+
+    private function dispatchResourceHelper(string $action, array $args): string
+    {
+        $helper = new ResourceHelper();
+        $behavior = new Behavior($action);
+        $helper->handle($behavior, $args);
+
+        return $helper->response() ?? '';
     }
 }
