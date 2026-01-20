@@ -56,6 +56,7 @@ class SynthetiqMemoryAdapter implements MemoryAdapterInterface
         }
 
         $episodeId = $meta['episode_id'] ?? uniqid('exchange_', true);
+        $meta['episode_id'] = $episodeId;
         $stored = $this->memory->record($scope, $text, $episodeId, $actor, $ownerId);
         if (!$stored) {
             return;
@@ -92,14 +93,23 @@ class SynthetiqMemoryAdapter implements MemoryAdapterInterface
         }
 
         $query = $this->buildQueryContext($input, $context, $scope, $meta);
-        $results = $memory->recallSimilar($query, $this->similarityThreshold);
-        $results = $this->limitResults($results);
+        $threshold = $this->resolveSimilarityThreshold($meta);
+        $results = $memory->recallSimilar($query, $threshold);
+        $results = $this->limitResults($results, $this->resolveMaxRelated($meta));
         $intentBiases = $this->buildIntentBiases($results);
 
-        $recall = new MemoryRecall($results, $intentBiases, [
+        $recallMeta = [
             'scope' => $scope,
             'owner_id' => $ownerId,
-        ]);
+            'session_id' => $meta['session_id'] ?? null,
+            'episode_id' => $meta['episode_id'] ?? null,
+            'similarity_threshold' => $threshold,
+        ];
+        $recallMeta = array_filter($recallMeta, static function ($value) {
+            return $value !== null && $value !== '';
+        });
+
+        $recall = new MemoryRecall($results, $intentBiases, $recallMeta);
 
         Dev::do('wise.memory.synthetiq.recalled', [
             'scope' => $scope,
@@ -114,6 +124,28 @@ class SynthetiqMemoryAdapter implements MemoryAdapterInterface
     {
         $scope = $meta['scope'] ?? $context->get('memory_scope', $this->defaultScope);
         return (string)$scope;
+    }
+
+    protected function resolveSimilarityThreshold(array $meta): float
+    {
+        $value = $meta['similarity_threshold'] ?? $meta['similarityThreshold'] ?? null;
+        if ($value === null || $value === '') {
+            return $this->similarityThreshold;
+        }
+
+        $value = (float)$value;
+        return $value >= 0 ? $value : $this->similarityThreshold;
+    }
+
+    protected function resolveMaxRelated(array $meta): int
+    {
+        $value = $meta['max_related'] ?? $meta['maxRelated'] ?? null;
+        if ($value === null || $value === '') {
+            return $this->maxRelated;
+        }
+
+        $value = (int)$value;
+        return $value >= 0 ? $value : $this->maxRelated;
     }
 
     protected function resolveOwnerId(Context $context, array $meta): ?string
@@ -161,6 +193,12 @@ class SynthetiqMemoryAdapter implements MemoryAdapterInterface
         if ($ownerId !== null) {
             $query->set('user_id', $ownerId);
         }
+        if (isset($meta['session_id'])) {
+            $query->set('session_id', $meta['session_id']);
+        }
+        if (isset($meta['memory_label'])) {
+            $query->set('memory_label', $meta['memory_label']);
+        }
 
         return $query;
     }
@@ -177,6 +215,15 @@ class SynthetiqMemoryAdapter implements MemoryAdapterInterface
         $memoryContext->set('response', $response);
         $memoryContext->set('scope', $scope);
         $memoryContext->set('timestamp', $meta['timestamp'] ?? time());
+        if (isset($meta['episode_id'])) {
+            $memoryContext->set('episode_id', $meta['episode_id']);
+        }
+        if (isset($meta['memory_label'])) {
+            $memoryContext->set('memory_label', $meta['memory_label']);
+        }
+        if (isset($meta['labels'])) {
+            $memoryContext->set('labels', $meta['labels']);
+        }
 
         $intent = $context->get('current_intent');
         if ($intent instanceof Intent) {
@@ -193,6 +240,9 @@ class SynthetiqMemoryAdapter implements MemoryAdapterInterface
         if (isset($meta['user_id'])) {
             $memoryContext->set('user_id', $meta['user_id']);
         }
+        if (isset($meta['owner_id'])) {
+            $memoryContext->set('owner_id', $meta['owner_id']);
+        }
         if (isset($meta['session_id'])) {
             $memoryContext->set('session_id', $meta['session_id']);
         }
@@ -200,13 +250,14 @@ class SynthetiqMemoryAdapter implements MemoryAdapterInterface
         return $memoryContext;
     }
 
-    protected function limitResults(array $results): array
+    protected function limitResults(array $results, ?int $limit = null): array
     {
-        if ($this->maxRelated <= 0 || count($results) <= $this->maxRelated) {
+        $limit = $limit ?? $this->maxRelated;
+        if ($limit <= 0 || count($results) <= $limit) {
             return $results;
         }
 
-        return array_slice($results, 0, $this->maxRelated, true);
+        return array_slice($results, 0, $limit, true);
     }
 
     protected function buildIntentBiases(array $results): array

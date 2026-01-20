@@ -175,6 +175,11 @@ class Console implements IDispatcher, IBehavioral
         $this->_displayManager->send($input);
     }
 
+    public function displayManager(): DisplayManager
+    {
+        return $this->_displayManager;
+    }
+
     public function update(): Console 
     {
         $this->_displayManager->update();

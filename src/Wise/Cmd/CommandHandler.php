@@ -21,6 +21,9 @@ class CommandHandler {
     public function canHandle($command) {
         // Check if the command is a native command or an alias
         $commandName = explode(' ', $command)[0];
+        if ($this->shouldDeferToResource($commandName, $command)) {
+            return false;
+        }
         return isset($this->_aliases[$commandName]) || method_exists($this, $commandName);
     }
 
@@ -228,6 +231,35 @@ class CommandHandler {
         }
 
         return false;
+    }
+
+    private function shouldDeferToResource(string $commandName, string $command): bool
+    {
+        $commandName = strtolower($commandName);
+        if (!in_array($commandName, ['list', 'show', 'help'], true)) {
+            return false;
+        }
+
+        $parts = preg_split('/\s+/', trim($command));
+        foreach ($parts as $part) {
+            $part = strtolower($part);
+            if ($part === 'resource' || $part === 'resources') {
+                return false;
+            }
+        }
+
+        $parser = new CommandParser();
+        $parsed = $parser->parse($command);
+        if (!$parsed->verb || $parsed->verb !== $commandName) {
+            return false;
+        }
+
+        $resource = $parsed->resources[0] ?? null;
+        if (!$resource || $resource === 'resource') {
+            return false;
+        }
+
+        return true;
     }
 
     private function extractResourceArgs(array $args): array

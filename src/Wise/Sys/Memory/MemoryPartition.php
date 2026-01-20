@@ -34,6 +34,17 @@ class MemoryPartition implements IMemoryWorkspace
 
     public function recordContext(Context $context, string $label, array $edges = []): void
     {
+        $now = time();
+        $timestamp = (int)$context->get('timestamp', 0);
+        if ($timestamp <= 0) {
+            $timestamp = $now;
+            $context->set('timestamp', $timestamp);
+        }
+        $lastSeen = (int)$context->get('last_seen', 0);
+        if ($lastSeen <= 0) {
+            $context->set('last_seen', $timestamp);
+        }
+
         $this->_memory->addMemory($label, $context, $edges);
         $this->applyRetention();
     }
@@ -79,12 +90,13 @@ class MemoryPartition implements IMemoryWorkspace
         $scored = [];
         foreach ($nodes as $label => $node) {
             $context = $node->getContext();
-            $lastSeen = (int)($context->get('last_seen') ?? 0);
+            $lastSeen = (int)$context->get('last_seen', 0);
             if ($lastSeen <= 0) {
-                $lastSeen = $now;
+                $timestamp = (int)$context->get('timestamp', 0);
+                $lastSeen = $timestamp > 0 ? $timestamp : $now;
+                $context->set('last_seen', $lastSeen);
+                $node->setContext($context);
             }
-            $context->set('last_seen', $now);
-            $node->setContext($context);
 
             $reinforcement = (float)($context->get('reinforcement') ?? 0);
             $connections = count($node->getEdges());

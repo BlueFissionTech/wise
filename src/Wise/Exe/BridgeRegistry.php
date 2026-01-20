@@ -17,6 +17,22 @@ class BridgeRegistry extends Obj
         $this->bridges[] = $bridge;
     }
 
+    /**
+     * @return array<int, string>
+     */
+    public function extensions(): array
+    {
+        $extensions = [];
+        foreach ($this->bridges as $bridge) {
+            $extensions = array_merge($extensions, $bridge->extensions());
+        }
+
+        $extensions = array_values(array_unique($extensions));
+        sort($extensions);
+
+        return $extensions;
+    }
+
     public function bridgeForFile(string $path): ?IBridge
     {
         foreach ($this->bridges as $bridge) {

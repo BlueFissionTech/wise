@@ -15,6 +15,7 @@ class BridgeContext extends Obj
     private array $env;
     private array $basePaths;
     private array $includePaths;
+    private array $vars;
     private $outputHandler;
     private $promptHandler;
     private $resourceResolver;
@@ -26,6 +27,7 @@ class BridgeContext extends Obj
         array $env = [],
         array $basePaths = [],
         array $includePaths = [],
+        array $vars = [],
         $outputHandler = null,
         $promptHandler = null,
         $resourceResolver = null,
@@ -37,6 +39,7 @@ class BridgeContext extends Obj
         $this->env = $env;
         $this->basePaths = $basePaths;
         $this->includePaths = $includePaths;
+        $this->vars = $vars;
         $this->outputHandler = $outputHandler;
         $this->promptHandler = $promptHandler;
         $this->resourceResolver = $resourceResolver;
@@ -75,6 +78,14 @@ class BridgeContext extends Obj
     public function includePaths(): array
     {
         return $this->includePaths;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function vars(): array
+    {
+        return $this->vars;
     }
 
     public function output(string $message): void

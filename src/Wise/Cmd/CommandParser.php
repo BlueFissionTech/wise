@@ -176,7 +176,7 @@ class CommandParser
 
     public function getSystemResources()
     {
-        return $this->knownResources;
+        return $this->availableResources();
     }
 
     public function getSystemPrepositions()
@@ -327,7 +327,7 @@ class CommandParser
     protected function isResource($word)
     {
         $word = $this->normalizeResource($word);
-        return in_array($word, $this->knownResources);
+        return in_array($word, $this->availableResources(), true);
     }
 
     protected function normalizeResource($word)
@@ -343,7 +343,7 @@ class CommandParser
         // if (substr($word, -1) === 's' && in_array(substr($word, 0, -1), $this->knownResources)) {
         //     $word = substr($word, 0, -1);
         // }
-        foreach ($this->knownResources as $resource)
+        foreach ($this->availableResources() as $resource)
         {
             if ($word == Str::pluralize($resource)) {
                 $word = $resource;
@@ -365,5 +365,18 @@ class CommandParser
         $word = $this->processResource($word);
 
         return $word;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function availableResources(): array
+    {
+        $dynamic = array_keys($this->app->getAbilities() ?? []);
+        $resources = array_merge($this->knownResources, $dynamic);
+        $resources = array_filter(array_unique($resources), fn($value) => is_string($value) && $value !== '');
+        sort($resources);
+
+        return $resources;
     }
 }

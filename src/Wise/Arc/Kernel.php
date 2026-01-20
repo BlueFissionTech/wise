@@ -22,6 +22,7 @@ use BlueFission\Str;
 use BlueFission\Wise\Usr\Profile;
 use BlueFission\Wise\Sys\Memory\WorkingMemoryCoordinator;
 use BlueFission\Wise\Exe\{BridgeRegistry, BridgeContext};
+use BlueFission\Wise\Res\ScriptedResourceRegistry;
 
 class Kernel {
     use Traits\ManagesFileSystem;
@@ -48,6 +49,7 @@ class Kernel {
     protected $_async;
     protected $_queue;
     protected $_output;
+    protected bool $_batchMode = false;
 
     protected static $_instance = null;
 
@@ -88,6 +90,16 @@ class Kernel {
 
     public function setQueueHandler(string $class) {
         $this->_queue = $class;
+    }
+
+    public function setBatchMode(bool $batchMode): void
+    {
+        $this->_batchMode = $batchMode;
+    }
+
+    public function isBatchMode(): bool
+    {
+        return $this->_batchMode;
     }
 
     public function boot() {
@@ -150,11 +162,25 @@ class Kernel {
     public function setBridgeRegistry(BridgeRegistry $registry): void
     {
         $this->_bridgeRegistry = $registry;
+        $this->registerScriptedResources();
     }
 
     public function bridgeRegistry(): ?BridgeRegistry
     {
         return $this->_bridgeRegistry;
+    }
+
+    public function registerScriptedResources(): void
+    {
+        if (!$this->_bridgeRegistry) {
+            return;
+        }
+
+        $root = $this->_fileSystemManager ? $this->_fileSystemManager->config('root') : null;
+        $root = $root ?: getcwd();
+
+        $registry = new ScriptedResourceRegistry($this, $this->_bridgeRegistry, $root);
+        $registry->register();
     }
 
     public function setProfile(Profile $profile): void
@@ -287,7 +313,10 @@ class Kernel {
 
     private function handleNative($request) {
         $output = $this->_commandHandler->handle($request);
-        $this->_console->output($output, 'system');
+        $this->_output = $output;
+        if (!$this->_batchMode) {
+            $this->_console->output($output, 'system');
+        }
         $this->recordMemoryOutput((string)$output);
     }
 
@@ -399,21 +428,84 @@ class Kernel {
             return null;
         }
 
-        $path = $request;
-        if (!is_file($path)) {
-            $candidate = getcwd() . DIRECTORY_SEPARATOR . $path;
-            if (is_file($candidate)) {
-                $path = $candidate;
-            } else {
+        $request = trim($request);
+        if ($request === '') {
+            return null;
+        }
+
+        $basePath = $this->scriptBasePath();
+        $direct = $this->resolveScriptPath($request, $basePath);
+        if ($direct) {
+            return $direct;
+        }
+
+        $pathInfo = pathinfo($request);
+        $extension = $pathInfo['extension'] ?? '';
+        if ($extension === '') {
+            foreach ($this->_bridgeRegistry->extensions() as $ext) {
+                $candidate = $this->resolveScriptPath($request . '.' . $ext, $basePath);
+                if ($candidate) {
+                    return $candidate;
+                }
+
+                $candidate = $this->resolveScriptPath('cmd' . DIRECTORY_SEPARATOR . $request . '.' . $ext, $basePath);
+                if ($candidate) {
+                    return $candidate;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function resolveScriptPath(string $path, string $basePath): ?string
+    {
+        $candidate = $path;
+        if (!is_file($candidate)) {
+            $candidate = $basePath . DIRECTORY_SEPARATOR . $path;
+            if (!is_file($candidate)) {
                 return null;
             }
         }
 
-        $bridge = $this->_bridgeRegistry->bridgeForFile($path);
-        return $bridge ? $path : null;
+        if (!$this->isPathAllowed($candidate)) {
+            return null;
+        }
+
+        $bridge = $this->_bridgeRegistry->bridgeForFile($candidate);
+        return $bridge ? $candidate : null;
     }
 
-    private function buildBridgeContext(array &$messages): BridgeContext
+    private function scriptBasePath(): string
+    {
+        if ($this->_fileSystemManager) {
+            $path = $this->_fileSystemManager->path();
+            if ($path) {
+                return $path;
+            }
+        }
+
+        return getcwd();
+    }
+
+    private function isPathAllowed(string $path): bool
+    {
+        if (!$this->_fileSystemManager) {
+            return true;
+        }
+
+        $root = $this->_fileSystemManager->config('root');
+        if (!$root) {
+            return true;
+        }
+
+        $rootPath = realpath($root) ?: $root;
+        $targetPath = realpath($path) ?: $path;
+
+        return Str::pos($targetPath, $rootPath) === 0;
+    }
+
+    public function buildBridgeContext(array &$messages, array $vars = []): BridgeContext
     {
         $resourcePath = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Exe' . DIRECTORY_SEPARATOR . 'resources';
         $resourceResolver = function (string $key): ?array {
@@ -474,10 +566,23 @@ class Kernel {
             $_ENV,
             [$resourcePath],
             [$resourcePath],
+            $vars,
             $outputHandler,
             $promptHandler,
             $resourceResolver
         );
+    }
+
+    public function lastOutput(): string
+    {
+        return (string)$this->_output;
+    }
+
+    public function consumeOutput(): string
+    {
+        $output = (string)$this->_output;
+        $this->_output = '';
+        return $output;
     }
 
     protected function output() {

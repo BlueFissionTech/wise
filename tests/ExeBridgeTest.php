@@ -21,6 +21,18 @@ final class ExeBridgeTest extends TestCase
         $this->assertNull($registry->bridgeForFile('unknown.txt'));
     }
 
+    public function testBridgeRegistryReportsExtensions(): void
+    {
+        $registry = new BridgeRegistry();
+        $registry->register(new JenssBridge());
+        $registry->register(new VibeBridge());
+
+        $extensions = $registry->extensions();
+
+        $this->assertContains('jss', $extensions);
+        $this->assertContains('vibe', $extensions);
+    }
+
     public function testJenssBridgeReportsMissingDependency(): void
     {
         $bridge = new JenssBridge();

@@ -27,15 +27,14 @@ class VibeBridge extends Obj implements IBridge
     public function runFile(string $path, BridgeContext $context): BridgeResult
     {
         $this->dispatch(Event::STARTED, new Meta(data: ['path' => $path], src: $this));
-        if (!class_exists(\BlueFission\Vibrato\Reader::class)) {
+        if (!$this->ensureVibratoReader()) {
             $this->dispatch(Event::FAILURE, new Meta(data: ['path' => $path], src: $this));
             return BridgeResult::failure('Vibe interpreter is not available in this environment.');
         }
 
         $llm = $context->llm();
         if ($llm === null) {
-            $this->dispatch(Event::FAILURE, new Meta(data: ['path' => $path], src: $this));
-            return BridgeResult::failure('Vibe interpreter requires an LLM client.');
+            $llm = new NullLlmClient();
         }
 
         $reader = new \BlueFission\Vibrato\Reader($llm);
@@ -43,6 +42,7 @@ class VibeBridge extends Obj implements IBridge
         if ($includePaths !== []) {
             $reader->setIncludePaths($includePaths);
         }
+        $this->applyContextVars($reader, $context->vars());
         $reader->inputFile($path);
 
         $vars = $reader->run();
@@ -57,15 +57,14 @@ class VibeBridge extends Obj implements IBridge
     public function runSource(string $source, BridgeContext $context, ?string $path = null): BridgeResult
     {
         $this->dispatch(Event::STARTED, new Meta(data: ['path' => $path], src: $this));
-        if (!class_exists(\BlueFission\Vibrato\Reader::class)) {
+        if (!$this->ensureVibratoReader()) {
             $this->dispatch(Event::FAILURE, new Meta(data: ['path' => $path], src: $this));
             return BridgeResult::failure('Vibe interpreter is not available in this environment.');
         }
 
         $llm = $context->llm();
         if ($llm === null) {
-            $this->dispatch(Event::FAILURE, new Meta(data: ['path' => $path], src: $this));
-            return BridgeResult::failure('Vibe interpreter requires an LLM client.');
+            $llm = new NullLlmClient();
         }
 
         $reader = new \BlueFission\Vibrato\Reader($llm);
@@ -73,6 +72,7 @@ class VibeBridge extends Obj implements IBridge
         if ($includePaths !== []) {
             $reader->setIncludePaths($includePaths);
         }
+        $this->applyContextVars($reader, $context->vars());
         $reader->input($source);
 
         $vars = $reader->run();
@@ -82,5 +82,47 @@ class VibeBridge extends Obj implements IBridge
         ]);
         $this->dispatch(Event::COMPLETE, new Meta(data: ['path' => $path], src: $this));
         return $result;
+    }
+
+    private function applyContextVars(object $reader, array $vars): void
+    {
+        if ($vars === []) {
+            return;
+        }
+
+        try {
+            $property = new \ReflectionProperty($reader, 'vars');
+            $property->setAccessible(true);
+            $property->setValue($reader, $vars);
+        } catch (\Throwable $e) {
+            // Ignore if the reader doesn't expose vars.
+        }
+    }
+
+    private function ensureVibratoReader(): bool
+    {
+        if (class_exists(\BlueFission\Vibrato\Reader::class)) {
+            return true;
+        }
+
+        $base = dirname(__DIR__, 3)
+            . DIRECTORY_SEPARATOR . 'vendor'
+            . DIRECTORY_SEPARATOR . 'bluefission'
+            . DIRECTORY_SEPARATOR . 'vibrato';
+
+        $autoload = $base . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php';
+        if (is_file($autoload)) {
+            require_once $autoload;
+        }
+
+        $readerFile = $base
+            . DIRECTORY_SEPARATOR . 'src'
+            . DIRECTORY_SEPARATOR . 'Vibrato'
+            . DIRECTORY_SEPARATOR . 'Reader.php';
+        if (is_file($readerFile)) {
+            require_once $readerFile;
+        }
+
+        return class_exists(\BlueFission\Vibrato\Reader::class);
     }
 }
