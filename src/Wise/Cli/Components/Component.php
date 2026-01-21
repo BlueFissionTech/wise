@@ -120,7 +120,7 @@ class Component implements IDrawable
                 $parsedChildLine = ConsoleDisplayUtil::parseAnsiCodes($line);
                 $childLineContent = $parsedChildLine['content'];
 
-                $lineLength = mb_strlen($line);
+                $lineLength = mb_strlen($childLineContent);
                 if (isset($lines[$childY + $index])) {
                     $parsedCurrentLine = ConsoleDisplayUtil::parseAnsiCodes($lines[$childY + $index]);
                     $currentLineContent = $parsedCurrentLine['content'];

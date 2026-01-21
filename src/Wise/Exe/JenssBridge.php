@@ -8,6 +8,13 @@ use BlueFission\Obj;
 
 class JenssBridge extends Obj implements IBridge
 {
+    private const JENERATOR_PARSER = \BlueFission\Jenerator\Parsing\JenssParser::class;
+    private const JENERATOR_INTERPRETER = \BlueFission\Jenerator\Runtime\Interpreter::class;
+    private const JENERATOR_MODULES = \BlueFission\Jenerator\Runtime\ModuleRegistry::class;
+    private const JENERATE_PARSER = \BlueFission\Jenerate\Parsing\JenssParser::class;
+    private const JENERATE_INTERPRETER = \BlueFission\Jenerate\Runtime\Interpreter::class;
+    private const JENERATE_MODULES = \BlueFission\Jenerate\Runtime\ModuleRegistry::class;
+
     public function name(): string
     {
         return 'jenss';
@@ -27,24 +34,27 @@ class JenssBridge extends Obj implements IBridge
     public function runFile(string $path, BridgeContext $context): BridgeResult
     {
         $this->dispatch(Event::STARTED, new Meta(data: ['path' => $path], src: $this));
-        if (!class_exists(\BlueFission\Jenerate\Parsing\JenssParser::class)
-            || !class_exists(\BlueFission\Jenerate\Runtime\Interpreter::class)
-            || !class_exists(\BlueFission\Jenerate\Runtime\ModuleRegistry::class)) {
+        $classes = $this->resolveRuntimeClasses();
+        if ($classes === null) {
             $this->dispatch(Event::FAILURE, new Meta(data: ['path' => $path], src: $this));
             return BridgeResult::failure('JenSS interpreter is not available in this environment.');
         }
 
-        $parser = new \BlueFission\Jenerate\Parsing\JenssParser();
+        $parserClass = $classes['parser'];
+        $interpreterClass = $classes['interpreter'];
+        $moduleRegistryClass = $classes['modules'];
+
+        $parser = new $parserClass();
         $ast = $parser->parseFile($path);
 
         $io = new JenssIo($context);
         $modulePaths = $this->modulePaths($context);
         $modules = $modulePaths !== []
-            ? new \BlueFission\Jenerate\Runtime\ModuleRegistry($modulePaths)
+            ? new $moduleRegistryClass($modulePaths)
             : null;
         $this->loadWiseResources($modules);
 
-        $interpreter = new \BlueFission\Jenerate\Runtime\Interpreter($io, null, $modules);
+        $interpreter = new $interpreterClass($io, null, $modules);
         $interpreter->run($ast);
 
         $result = BridgeResult::success(implode(PHP_EOL, $io->messages()), [
@@ -59,24 +69,27 @@ class JenssBridge extends Obj implements IBridge
     public function runSource(string $source, BridgeContext $context, ?string $path = null): BridgeResult
     {
         $this->dispatch(Event::STARTED, new Meta(data: ['path' => $path], src: $this));
-        if (!class_exists(\BlueFission\Jenerate\Parsing\JenssParser::class)
-            || !class_exists(\BlueFission\Jenerate\Runtime\Interpreter::class)
-            || !class_exists(\BlueFission\Jenerate\Runtime\ModuleRegistry::class)) {
+        $classes = $this->resolveRuntimeClasses();
+        if ($classes === null) {
             $this->dispatch(Event::FAILURE, new Meta(data: ['path' => $path], src: $this));
             return BridgeResult::failure('JenSS interpreter is not available in this environment.');
         }
 
-        $parser = new \BlueFission\Jenerate\Parsing\JenssParser();
+        $parserClass = $classes['parser'];
+        $interpreterClass = $classes['interpreter'];
+        $moduleRegistryClass = $classes['modules'];
+
+        $parser = new $parserClass();
         $ast = $parser->parse($source, $path);
 
         $io = new JenssIo($context);
         $modulePaths = $this->modulePaths($context);
         $modules = $modulePaths !== []
-            ? new \BlueFission\Jenerate\Runtime\ModuleRegistry($modulePaths)
+            ? new $moduleRegistryClass($modulePaths)
             : null;
         $this->loadWiseResources($modules);
 
-        $interpreter = new \BlueFission\Jenerate\Runtime\Interpreter($io, null, $modules);
+        $interpreter = new $interpreterClass($io, null, $modules);
         $interpreter->run($ast);
 
         $result = BridgeResult::success(implode(PHP_EOL, $io->messages()), [
@@ -107,9 +120,9 @@ class JenssBridge extends Obj implements IBridge
         return $paths;
     }
 
-    private function loadWiseResources(?\BlueFission\Jenerate\Runtime\ModuleRegistry $modules): void
+    private function loadWiseResources(?object $modules): void
     {
-        if (!$modules) {
+        if (!$modules || !method_exists($modules, 'resources')) {
             return;
         }
 
@@ -119,5 +132,34 @@ class JenssBridge extends Obj implements IBridge
         }
 
         $modules->resources()->load('wise', 'wise_resources');
+    }
+
+    /**
+     * @return array<string, class-string>|null
+     */
+    private function resolveRuntimeClasses(): ?array
+    {
+        $candidates = [
+            [
+                'parser' => self::JENERATOR_PARSER,
+                'interpreter' => self::JENERATOR_INTERPRETER,
+                'modules' => self::JENERATOR_MODULES,
+            ],
+            [
+                'parser' => self::JENERATE_PARSER,
+                'interpreter' => self::JENERATE_INTERPRETER,
+                'modules' => self::JENERATE_MODULES,
+            ],
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (class_exists($candidate['parser'])
+                && class_exists($candidate['interpreter'])
+                && class_exists($candidate['modules'])) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 }

@@ -6,6 +6,9 @@ use BlueFission\Wise\Usr\Profile;
 
 class WorkingMemoryCoordinator
 {
+    private const DEFAULT_GLOBAL_MAX = 500;
+    private const DEFAULT_USER_MAX = 500;
+
     protected object $_reader;
     protected MemoryPolicy $_policy;
     protected IMemoryWorkspace $_global;
@@ -19,7 +22,10 @@ class WorkingMemoryCoordinator
         $this->_reader = $reader;
         $this->_policy = $policy ?? new DefaultMemoryPolicy();
         $this->partitionFactory = $partitionFactory;
+        $this->_defaultGlobalMaxSize = self::DEFAULT_GLOBAL_MAX;
+        $this->_defaultUserMaxSize = self::DEFAULT_USER_MAX;
         $this->_global = $this->makePartition('global', null);
+        $this->_global->setMaxSize($this->_defaultGlobalMaxSize);
     }
 
     public function global(): IMemoryWorkspace

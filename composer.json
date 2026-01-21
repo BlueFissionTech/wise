@@ -135,7 +135,9 @@
     },
     "config": {
         "allow-plugins": {
-            "php-http/discovery": true
+            "php-http/discovery": true,
+            "composer/installers": true,
+            "bluefission/bluecore": true
         }
     }
 }

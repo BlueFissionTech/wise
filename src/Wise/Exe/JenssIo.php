@@ -4,13 +4,14 @@ namespace BlueFission\Wise\Exe;
 
 use BlueFission\Behavioral\Behaviors\Event;
 use BlueFission\Behavioral\Behaviors\Meta;
-use BlueFission\Jenerate\Runtime\Io\IoInterface;
+use BlueFission\Jenerator\Runtime\Io\IoInterface;
 use BlueFission\Obj;
 
 class JenssIo extends Obj implements IoInterface
 {
     private BridgeContext $context;
     private string $channel = 'default';
+    private string $inputChannel = 'default';
     /** @var array<int, string> */
     private array $messages = [];
     /** @var array<int, string> */
@@ -26,6 +27,12 @@ class JenssIo extends Obj implements IoInterface
     {
         $this->channel = $channel;
         $this->dispatch(Event::CHANGE, new Meta(data: ['channel' => $channel], src: $this));
+    }
+
+    public function setInputChannel(string $channel): void
+    {
+        $this->inputChannel = $channel;
+        $this->dispatch(Event::CHANGE, new Meta(data: ['inputChannel' => $channel], src: $this));
     }
 
     public function say(string $message): void

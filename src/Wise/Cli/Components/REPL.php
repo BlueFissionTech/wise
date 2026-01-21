@@ -78,11 +78,7 @@ class REPL extends Component
             }
 
             if ($data?->channel == 'system') {
-                if ( $this->_console?->getDisplayMode() == Console::DYNAMIC_MODE ) {
-                    // $this->addContent(PHP_EOL);
-                }
-                $this->addContent("\033[33m".$data?->content."\033[39m" ?? null);
-                echo "\n"; // TODO, handle this through the driver
+                $this->appendSystemOutput((string)($data?->content ?? ''));
             }
         });
 
@@ -150,6 +146,16 @@ class REPL extends Component
         $this->_cursor->setPosition($this->_prompt->getLength(), $this->_prompt->getY());
     }
 
+    public function inputValue(): string
+    {
+        return $this->_prompt->getContent();
+    }
+
+    public function hintValue(): string
+    {
+        return $this->_hintContent;
+    }
+
     private function updateHintPosition(): void
     {
         $hintX = $this->_prompt->getLength();
@@ -163,12 +169,65 @@ class REPL extends Component
     private function updateHint(string $input): void
     {
         $hint = $this->_suggester->hint($input);
-        if ($hint === $this->_hintContent) {
+        $this->updateHintPosition();
+
+        $rendered = $this->formatHintOutput($hint);
+        if ($hint !== $this->_hintContent) {
+            $this->_hintContent = $hint;
+        }
+
+        $this->_hint->setContent($rendered);
+    }
+
+    private function formatHintOutput(string $hint): string
+    {
+        $availableWidth = $this->_hint->getWidth();
+        if ($availableWidth <= 0) {
+            return '';
+        }
+
+        $output = $hint === '' ? '' : "\033[90m{$hint}\033[0m";
+        $visibleLength = $this->visibleLength($output);
+        $pad = $availableWidth - $visibleLength;
+        if ($pad > 0) {
+            $output .= str_repeat(' ', $pad);
+        } elseif ($output === '' && $availableWidth > 0) {
+            $output = str_repeat(' ', $availableWidth);
+        }
+
+        return $output;
+    }
+
+    private function visibleLength(string $value): int
+    {
+        $stripped = preg_replace('/\e\\[[0-9;]*m/', '', $value);
+        return mb_strlen($stripped ?? '');
+    }
+
+    private function appendSystemOutput(string $output): void
+    {
+        if ($output === '') {
             return;
         }
 
-        $this->_hintContent = $hint;
-        $this->_hint->setContent($hint === '' ? '' : "\033[90m{$hint}\033[0m");
-        $this->updateHintPosition();
+        $lines = preg_split('/\r\n|\r|\n/', $output);
+        if (!is_array($lines)) {
+            $this->addContent($this->formatSystemLine($output));
+            return;
+        }
+
+        $lastIndex = count($lines) - 1;
+        if ($lastIndex >= 0 && $lines[$lastIndex] === '') {
+            array_pop($lines);
+        }
+
+        foreach ($lines as $line) {
+            $this->addContent($this->formatSystemLine($line));
+        }
+    }
+
+    private function formatSystemLine(string $line): string
+    {
+        return "\033[33m{$line}\033[39m";
     }
 }
