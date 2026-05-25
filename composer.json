@@ -61,7 +61,7 @@
             "options": {
                 "symlink": true
             },
-            "version": "1.3.5-alpha"
+            "version": "1.3.31-alpha"
         },
         {
             "type": "vcs",
@@ -90,7 +90,7 @@
     ],
     "minimum-stability": "dev",
     "require": {
-        "bluefission/develation": "dev-master as 1.3.5-alpha",
+        "bluefission/develation": "dev-master as 1.3.31-alpha",
         "bluefission/automata": "dev-master",
         "bluefission/simpleclients": "dev-master",
         "bluefission/synthetiq": "dev-main",
