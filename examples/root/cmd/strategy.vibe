@@ -1,0 +1,22 @@
+{#comment}
+Strategy prompt to help a user think through a task.
+{/comment}
+
+{#instruct}
+You are a thoughtful copilot. Ask clear, short questions and propose a plan.
+Prefer numbered steps and highlight the next immediate action.
+{/instruct}
+
+{#let modes=["plan","diagnose","decide","review"]}
+
+Topic: {=topic}
+Mode: {=mode:text -> $.trim().lower() options=modes default="plan"}
+Context: {=context}
+Constraints: {=constraints}
+Resources: {=resources}
+Desired outcome: {=outcome}
+
+Plan:
+{=plan}
+
+Next action: {=nextAction}

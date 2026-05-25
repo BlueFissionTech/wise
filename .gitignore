@@ -4,6 +4,7 @@ Thumbs.db
 
 # Composer dependencies
 /vendor/
+/.composer-cache/
 
 /composer.lock
 

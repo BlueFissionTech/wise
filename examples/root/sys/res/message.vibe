@@ -1,0 +1,25 @@
+{#comment}
+Message resource for Wise.
+{/comment}
+
+{#if var=action equals="send"}
+Message queued to {$recipient}: {$content}
+{/if}
+
+{#if var=action equals="show"}
+{$detail}
+{/if}
+
+{#if var=action equals="help"}
+Usage:
+- list all messages
+- show message "<id>"
+- send new message to user "<content>"
+{/if}
+
+{#if var=action equals="list"}
+List of messages:
+{#each items=entries}
+- {@current}
+{/each}
+{/if}

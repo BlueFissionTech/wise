@@ -15,6 +15,7 @@ class TextOutput extends Component
     protected int $_bufferSize;
     protected Arr $_lines;
     protected int $_scrollTop; // The topmost visible line of the content
+    protected int $_sequence = 0;
 
     public function __construct(int $x = 0, int $y = 0, int $width = 80, int $height = 24, int $bufferSize = 1024, int $zIndex = 0)
     {
@@ -27,7 +28,8 @@ class TextOutput extends Component
 
     public function addLine(string $line): void
     {
-        $this->addChild(new Text(0, 0, $this->getWidth(), 1, $line, 0, true, false));
+        $this->_sequence++;
+        $this->addChild(new Text(0, 0, $this->getWidth(), 1, $line, $this->_sequence, true, false));
 
         if ( $this->_console?->getDisplayMode() == Console::DYNAMIC_MODE ) {
             $this->_scrollTop = $this->calculateScrollTop();

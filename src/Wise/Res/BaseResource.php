@@ -69,7 +69,10 @@ abstract class BaseResource extends Service {
         if (!in_array($action, $actions)) {
             $response = "I'm sorry, Invalid action for this resource ({$action})." . PHP_EOL . PHP_EOL;
             $response .= $this->help();
-            
+            $this->setOutputType('error', [
+                'error' => 'invalid_action',
+                'action' => $action,
+            ]);
             $this->_response = $response;
             $this->emitOutputEventIfNeeded();
             $this->emitWaitingEventIfNeeded();
@@ -150,11 +153,23 @@ abstract class BaseResource extends Service {
                 }
                 $this->keep($entry);
                 $response = ucfirst($item)." '{$name}' created'\n";
+                $this->setOutputType('create', [
+                    'status' => 'created',
+                    'name' => $name,
+                ]);
             } else {
                 $response = ucfirst($item)." '{$name}' already exists.\n";
+                $this->setOutputType('create', [
+                    'status' => 'exists',
+                    'name' => $name,
+                ]);
             }
         } else {
             $response = "Please provide a name for the new $item (ex: `create {$this->_name} \"<{$this->_key}>\"`).\n";
+            $this->setOutputType('error', [
+                'error' => 'missing_name',
+                'action' => 'create',
+            ]);
         }
 
         $this->_response = $response;
@@ -170,6 +185,10 @@ abstract class BaseResource extends Service {
         // Check if the OpenAI API key is set
         if (!env('OPEN_AI_API_KEY')) {
             $this->_response = "OpenAI API key is not set.";
+            $this->setOutputType('error', [
+                'error' => 'missing_api_key',
+                'action' => 'generate',
+            ]);
             return;
         }
 
@@ -185,6 +204,11 @@ abstract class BaseResource extends Service {
         // Check for errors in the response
         if (isset($gpt3_response['error'])) {
             $this->_response = "Error generating {$item}.";
+            $this->setOutputType('error', [
+                'error' => 'generation_failed',
+                'action' => 'generate',
+                'item' => $item,
+            ]);
             return;
         }
 
@@ -192,6 +216,9 @@ abstract class BaseResource extends Service {
         $object = trim($gpt3_response['choices'][0]['text']);
 
         $this->_response = $object;
+        $this->setOutputType('generate', [
+            'title' => $title,
+        ]);
     }
 
     protected function set($args)
@@ -214,11 +241,25 @@ abstract class BaseResource extends Service {
                 $entry[$key] = $value;
                 $this->keep($entry);
                 $this->_response = ucfirst($item)." '{$key}' has been set to '{$value}'.";
+                $this->setOutputType('update', [
+                    'property' => $key,
+                    'value' => $value,
+                    'name' => $entry[$this->_key] ?? $key,
+                ]);
             } else {
                 $this->_response = ucfirst($item)." '{$key}' not found.";
+                $this->setOutputType('error', [
+                    'error' => 'not_found',
+                    'action' => 'set',
+                    'property' => $key,
+                ]);
             }
         } else {
             $this->_response = "Please provide a property and a value to set the {$item}.";
+            $this->setOutputType('error', [
+                'error' => 'missing_property',
+                'action' => 'set',
+            ]);
         }
     }
 
@@ -237,12 +278,26 @@ abstract class BaseResource extends Service {
             if (isset($entry) && isset($entry[trim($key)]) && $entry[trim($key)] !== '') {
                 $value = $entry[trim($key)];
                 $this->_response = "The value of '{$key}' is '{$value}'.";
+                $this->setOutputType('property', [
+                    'property' => $key,
+                    'value' => $value,
+                    'name' => $entry[$this->_key] ?? null,
+                ]);
             } else {
                 $this->_response = ucfirst($this->_name)." '{$key}' not found.";
+                $this->setOutputType('error', [
+                    'error' => 'not_found',
+                    'action' => 'get',
+                    'property' => $key,
+                ]);
             }
             return;
         } else {
             $this->_response = "Please provide a property to get the value of the {$item}.";
+            $this->setOutputType('error', [
+                'error' => 'missing_property',
+                'action' => 'get',
+            ]);
         }
     }
 
@@ -255,11 +310,16 @@ abstract class BaseResource extends Service {
         if (count($args) > 0 && !is_numeric($args[0])) {
             $key = $args[0];
             $list = $this->retrieve($key);
-            
+
             if (isset($list)) {
                 $response = $this->subList($args);
             } else {
                 $response = "'".ucfirst($item)." '{$key}' not found. Use `list all ".$this->pluralize($this->_name)."` to see available lists.\n";
+                $this->setOutputType('error', [
+                    'error' => 'not_found',
+                    'action' => 'list',
+                    'name' => $key,
+                ]);
             }
         } else {
             $response = $this->mainList($args);
@@ -302,12 +362,14 @@ abstract class BaseResource extends Service {
             $i = 0;
             $count = 0;
             $response = "";
+            $pageItems = [];
 
             $response = "Available ". $this->pluralize($item) .":" . PHP_EOL;
             foreach ($entries as $entry) {
                 if ($i >= $pageStart && $i < $pageEnd) {
                     $response .= "  - " . $entry . PHP_EOL;
                     $count++;
+                    $pageItems[] = $entry;
                 }
                 $i++;
             }
@@ -316,8 +378,25 @@ abstract class BaseResource extends Service {
             $response .= $this->_listAccessCommand . PHP_EOL;
             $response .= "Type `previous ". $this->pluralize($this->_name) ."` or `next ". $this->pluralize($this->_name) ."` to move through pages." . PHP_EOL;
             $response .= "Type `help with ". $this->pluralize($this->_name) ."` for more options." . PHP_EOL;
+
+            $this->setOutputType('list', [
+                'list_type' => 'main',
+                'page' => $page,
+                'per_page' => $this->_perPage,
+                'total' => $total,
+                'count' => $count,
+                'items' => $pageItems,
+            ]);
         } else {
             $response = "No ". $this->pluralize($item) ." found.";
+            $this->setOutputType('list', [
+                'list_type' => 'main',
+                'page' => $page,
+                'per_page' => $this->_perPage,
+                'total' => 0,
+                'count' => 0,
+                'items' => [],
+            ]);
         }
 
         return $response;
@@ -358,18 +437,34 @@ abstract class BaseResource extends Service {
             $response = ucfirst($this->pluralize($this->_itemName))." in {$listName}:\n";
             $i = 0;
             $count = 0;
+            $pageItems = [];
             foreach ($list as $title=>$entry) {
                 if ($i >= $start && $i <= $end) {
                     $name = (is_string($entry) ? $entry : $entry['name']);
                     $response .= "- {$name}\n";
                     $count++;
+                    $pageItems[] = $name;
                 }
                 $i++;
             }
 
             $response .= "Showing {$count} of {$total} ".$this->pluralize($this->_itemName)." for {$listName}. Page {$page} of {$totalPages}. Type `previous {$this->_name} {$listName}` or `next {$this->_name} {$listName}` to move through pages.\n";
+            $this->setOutputType('list', [
+                'list_type' => 'sub',
+                'list_name' => $listName,
+                'page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'count' => $count,
+                'items' => $pageItems,
+            ]);
         } else {
             $response = "{$this->_itemName} '{$listName}' not found. Use `list all ".$this->pluralize($this->_name)."` to see available ".$this->pluralize($this->_itemName).".\n";
+            $this->setOutputType('error', [
+                'error' => 'not_found',
+                'action' => 'list',
+                'name' => $listName,
+            ]);
         }
 
         return $response;
@@ -403,11 +498,16 @@ abstract class BaseResource extends Service {
     {
         $response = "";
         $entries = $this->getAll();
-        foreach ($entry as $object) {
+        foreach ($entries as $object) {
             $response .= $this->formatListItem($object) . PHP_EOL;
         }
 
         $this->_response = $response;
+        $this->setOutputType('list', [
+            'list_type' => 'all',
+            'count' => count($entries),
+            'items' => $entries,
+        ]);
     }
 
 
@@ -483,6 +583,19 @@ abstract class BaseResource extends Service {
                     $response .= "No ".$this->pluralize($this->_subItemName)." found matching keyword(s) '{$keyword}'.\n";
                 }
             }
+            $itemMatches = [];
+            foreach ($objects as $object) {
+                if (isset($object[$this->_key])) {
+                    $itemMatches[] = $object[$this->_key];
+                }
+            }
+            $this->setOutputType('search', [
+                'keyword' => $keyword,
+                'list_matches' => $lists,
+                'item_matches' => $itemMatches,
+                'list_count' => count($lists),
+                'item_count' => count($itemMatches),
+            ]);
             $this->_response = $response;
         } else {
             $verb = 'find';
@@ -491,9 +604,13 @@ abstract class BaseResource extends Service {
                     break;
                 }
             }
-            
+
             $prep = $verb == 'search' ? 'for' : 'with';
             $this->_response = "Please provide a keyword to {$verb} by (ex: {$verb} {$plural} {$prep} \"<keyword>\").\n";
+            $this->setOutputType('error', [
+                'error' => 'missing_keyword',
+                'action' => 'find',
+            ]);
         }
     }
 
@@ -504,6 +621,10 @@ abstract class BaseResource extends Service {
 
         if (!$name) {
             $this->_response = "You must provide the name of the {$this->_name} to display.";
+            $this->setOutputType('error', [
+                'error' => 'missing_name',
+                'action' => 'show',
+            ]);
             return;
         }
 
@@ -511,10 +632,19 @@ abstract class BaseResource extends Service {
 
         if (!$entry) {
             $this->_response = ucfirst($item)." '$name' not found.";
+            $this->setOutputType('error', [
+                'error' => 'not_found',
+                'action' => 'show',
+                'name' => $name,
+            ]);
             return;
         }
 
         $this->_response = $this->formatDetails($entry);
+        $this->setOutputType('detail', [
+            'name' => $name,
+            'entry' => $entry,
+        ]);
     }
 
     protected function select($args)
@@ -524,6 +654,10 @@ abstract class BaseResource extends Service {
 
         if (!$id) {
             $this->_response = "You must provide the id of the {$item} to display.";
+            $this->setOutputType('error', [
+                'error' => 'missing_id',
+                'action' => 'select',
+            ]);
             return;
         }
 
@@ -531,10 +665,19 @@ abstract class BaseResource extends Service {
 
         if (!$this->_selected) {
             $this->_response = ucfirst($item)." '$id' not found.";
+            $this->setOutputType('error', [
+                'error' => 'not_found',
+                'action' => 'select',
+                'id' => $id,
+            ]);
             return;
         }
 
         $this->_response = $this->formatDetails($this->_selected);
+        $this->setOutputType('detail', [
+            'id' => $id,
+            'entry' => $this->_selected,
+        ]);
     }
 
     protected function edit($args)
@@ -558,6 +701,9 @@ abstract class BaseResource extends Service {
         $this->keep($entry);
 
         $this->_response = ucfirst($item)." '{$name}' has been updated.";
+        $this->setOutputType('update', [
+            'name' => $name,
+        ]);
     }
 
     protected function save($args)
@@ -566,6 +712,9 @@ abstract class BaseResource extends Service {
         $item = $this->_itemName ?? $this->_name;
 
         $this->_response = ucfirst($item)." has been saved.";
+        $this->setOutputType('save', [
+            'name' => $item,
+        ]);
     }
 
     protected function add($args)
@@ -600,14 +749,33 @@ abstract class BaseResource extends Service {
                     $list[$itemName] = $entry;
                     $this->keep($list);
                     $response = "Item '{$itemName}' added to {$item} '{$listName}'.\n";
+                    $this->setOutputType('add', [
+                        'status' => 'added',
+                        'name' => $itemName,
+                        'list' => $listName,
+                    ]);
                 } else {
                     $response = "Item '{$itemName}' already exists in list '{$listName}'.\n";
+                    $this->setOutputType('add', [
+                        'status' => 'exists',
+                        'name' => $itemName,
+                        'list' => $listName,
+                    ]);
                 }
             } else {
                 $response = "List '{$listName}' not found. Use `list todo` to see available lists.\n";
+                $this->setOutputType('error', [
+                    'error' => 'not_found',
+                    'action' => 'add',
+                    'list' => $listName,
+                ]);
             }
         } else {
             $response = "Please provide the list name and item name (ex: add \"<item description>\" to the {$this->_name} \"<list name>\").\n";
+            $this->setOutputType('error', [
+                'error' => 'missing_name',
+                'action' => 'add',
+            ]);
         }
 
         $this->_response = $response;
@@ -626,6 +794,10 @@ abstract class BaseResource extends Service {
                 $response .= $line . PHP_EOL;
             }
         }
+
+        $this->setOutputType('help', [
+            'commands' => $this->_actions,
+        ]);
 
         return $response;
     }
@@ -822,6 +994,16 @@ abstract class BaseResource extends Service {
     {
         $a = (in_array(substr($text, 0, 1), ['a', 'e', 'i', 'o', 'u']) ? 'an' : 'a');
         return $a;
+    }
+
+    protected function setOutputType(string $type, array $meta = []): void
+    {
+        $payload = array_merge([
+            'output_type' => $type,
+            'item' => $this->_itemName ?? $this->_name,
+        ], $meta);
+
+        $this->mergeOutputMeta($payload);
     }
 
     /**

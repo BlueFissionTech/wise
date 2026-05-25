@@ -17,6 +17,7 @@ class REPL extends Component
     protected Text $_hint;
     protected CommandSuggester $_suggester;
     protected string $_hintContent = '';
+    protected bool $_inputSuspended = false;
 
     public function __construct(string|Str|Component $content = '', int $bufferSize = 1024)
     {
@@ -101,16 +102,31 @@ class REPL extends Component
         }
 
         $this->setDimensions($newWidth, $newHeight);
-        $this->_textOutput->setDimensions($newWidth, max(1, $newHeight - 1));
-        $this->_prompt->setDimensions($newWidth, 1);
-        $this->_prompt->setY($newHeight - 1);
-        $this->updateHintPosition();
-        $this->_cursor->setPosition($this->_prompt->getLength(), $this->_prompt->getY());
+
+        if ($this->_inputSuspended) {
+            $this->_textOutput->setDimensions($newWidth, max(1, $newHeight));
+            $offscreen = $newHeight;
+            $this->_prompt->setDimensions(0, 1);
+            $this->_prompt->setY($offscreen);
+            $this->_hint->setDimensions(0, 1);
+            $this->_hint->setY($offscreen);
+            $this->_cursor->setPosition(0, $offscreen);
+        } else {
+            $this->_textOutput->setDimensions($newWidth, max(1, $newHeight - 1));
+            $this->_prompt->setDimensions($newWidth, 1);
+            $this->_prompt->setY($newHeight - 1);
+            $this->updateHintPosition();
+            $this->_cursor->setPosition($this->_prompt->getLength(), $this->_prompt->getY());
+        }
         parent::update();
     }
 
     public function readInput($input = null): void
     {
+        if ($this->_inputSuspended) {
+            return;
+        }
+
         if ($input) {
             $this->updatePromptContent($input);
             $this->updateHint($input);
@@ -120,6 +136,10 @@ class REPL extends Component
 
     public function handleInput($input = null): void
     {
+        if ($this->_inputSuspended) {
+            return;
+        }
+
         if ($input) {
             $this->_prompt->setActive(false);
 
@@ -144,6 +164,24 @@ class REPL extends Component
         $this->_prompt->setActive(true);
         $this->updateHint('');
         $this->_cursor->setPosition($this->_prompt->getLength(), $this->_prompt->getY());
+    }
+
+    public function suspendInput(): void
+    {
+        $this->_inputSuspended = true;
+        $this->_prompt->setActive(false);
+        $this->_prompt->updateContent('');
+        $this->_hint->setContent('');
+        $this->_hintContent = '';
+        $this->update();
+    }
+
+    public function resumeInput(): void
+    {
+        $this->_inputSuspended = false;
+        $this->_prompt->setActive(true);
+        $this->update();
+        $this->newPrompt();
     }
 
     public function inputValue(): string

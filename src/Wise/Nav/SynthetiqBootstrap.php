@@ -3,17 +3,21 @@
 namespace BlueFission\Wise\Nav;
 
 use BlueFission\SynthetIQ\SynthetIQ;
+use BlueFission\SynthetIQ\Intents\IntelligenceRouter;
 use BlueFission\SynthetIQ\Memory\MemoryAdapterInterface;
 use BlueFission\Automata\Language\{Interpreter, Grammar, StemmerLemmatizer, Walker};
 use BlueFission\Automata\Analysis\KeywordTopicAnalyzer;
 use BlueFission\Automata\Strategy\NaiveBayesTextClassification;
+use BlueFission\Automata\Context;
+use BlueFission\Str;
 
 class SynthetiqBootstrap
 {
     public static function fromVendorSampleConfigs(
         ?string $basePath = null,
         ?string $modelPath = null,
-        ?MemoryAdapterInterface $memoryAdapter = null
+        ?MemoryAdapterInterface $memoryAdapter = null,
+        ?callable $progress = null
     ): SynthetiqProxy
     {
         $root = dirname(__DIR__, 3);
@@ -22,6 +26,8 @@ class SynthetiqBootstrap
         if (!is_dir($configPath)) {
             throw new \RuntimeException('Synthetiq sample configs not found at: ' . $configPath);
         }
+
+        self::emitProgress($progress, 'configs', 'Loading Synthetiq configs...');
 
         $skills = $configPath . DIRECTORY_SEPARATOR . 'skills.php';
         if (is_file($skills)) {
@@ -42,6 +48,7 @@ class SynthetiqBootstrap
             'documenter' => $documenter,
             'memory_adapter' => $memoryAdapter,
             'model_path' => $modelPath ?? $root . DIRECTORY_SEPARATOR . 'artifacts' . DIRECTORY_SEPARATOR . 'models' . DIRECTORY_SEPARATOR . 'synthetiq',
+            'progress' => $progress,
         ]);
     }
 
@@ -52,16 +59,26 @@ class SynthetiqBootstrap
         $grammar = $config['grammar'] ?? ['rules' => [], 'commands' => []];
         $tokens = $config['tokens'] ?? [];
         $documenter = $config['documenter'] ?? null;
+        $progress = $config['progress'] ?? null;
 
         if (!$documenter) {
             throw new \InvalidArgumentException('documenter is required for Synthetiq bootstrap.');
         }
 
         $modelDir = $config['model_path'] ?? (dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'artifacts' . DIRECTORY_SEPARATOR . 'models' . DIRECTORY_SEPARATOR . 'synthetiq');
+        $modelDir = rtrim($modelDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
         if (!is_dir($modelDir)) {
             mkdir($modelDir, 0777, true);
         }
 
+        $modelFile = self::resolveModelPath($modelDir, KeywordTopicAnalyzer::class);
+        if (is_file($modelFile)) {
+            self::emitProgress($progress, 'model', 'Loading cached topic model...', ['cache' => true]);
+        } else {
+            self::emitProgress($progress, 'model', 'Preparing topic model cache...', ['cache' => false]);
+        }
+
+        self::emitProgress($progress, 'interpreter', 'Initializing language interpreter...');
         $interpreter = new Interpreter(
             new Grammar(
                 new StemmerLemmatizer(),
@@ -73,6 +90,7 @@ class SynthetiqBootstrap
             new Walker()
         );
 
+        self::emitProgress($progress, 'analyzer', 'Preparing intent analyzer...');
         $analyzer = new KeywordTopicAnalyzer(new NaiveBayesTextClassification, $modelDir);
         $ai = new SynthetIQ($interpreter, $analyzer);
 
@@ -81,8 +99,22 @@ class SynthetiqBootstrap
             $ai->setMemoryAdapter($memoryAdapter);
         }
 
-        self::trainRoutes($ai, $dialogue, $intentBoosts);
+        $intentModelPath = $modelDir . 'intent_naive_bayes.phpml';
+        $cacheKey = self::buildIntentCacheKey($dialogue, $intentBoosts, $config);
+        self::configureIntentRouter($ai, [
+            'naive_bayes' => [
+                'model_path' => $intentModelPath,
+                'cache_dir' => $modelDir,
+                'cache_key' => $cacheKey,
+            ],
+        ]);
 
+        $intentCacheHit = is_file($intentModelPath);
+        self::emitProgress($progress, 'routes', 'Training intent routes...', ['cache' => $intentCacheHit]);
+        self::trainRoutes($ai, $dialogue, $intentBoosts, $progress);
+        self::warmIntentRouter($ai);
+
+        self::emitProgress($progress, 'finalize', 'Finalizing navigator...');
         $proxy = new SynthetiqProxy($ai);
 
         $extraKeywords = $config['intent_keywords'] ?? [];
@@ -109,11 +141,31 @@ class SynthetiqBootstrap
         return $proxy;
     }
 
-    private static function trainRoutes(SynthetIQ $ai, array $dialogue, array $intentBoosts = []): void
+    private static function trainRoutes(SynthetIQ $ai, array $dialogue, array $intentBoosts = [], ?callable $progress = null): void
     {
         $stopwords = ['how', 'what', 'is', 'the', 'a', 'an', 'to', 'for', 'on', 'in'];
+        $total = 0;
+        foreach ($dialogue as $info) {
+            $phrases = $info[1] ?? [];
+            $total += 1;
+            if (is_array($phrases)) {
+                $total += count($phrases);
+            }
+        }
+        $current = 0;
+        $emitProgress = function () use ($progress, &$current, $total) {
+            if (!$progress || $total <= 0) {
+                return;
+            }
+
+            self::emitProgress($progress, 'routes', 'Training intent routes...', [
+                'sub_current' => $current,
+                'sub_total' => $total,
+            ]);
+        };
 
         foreach ($dialogue as $category => $info) {
+            $current++;
             $boost = $intentBoosts[$category] ?? [];
             $keywords = $info[2] ?? [];
             if (!empty($boost['keywords'])) {
@@ -123,11 +175,20 @@ class SynthetiqBootstrap
             $keywords = self::normalizeKeywords($keywords, array_merge($stopwords, $exclude));
             $priorityBase = $boost['priority'] ?? null;
             $ai->addIntentKeywords($category, $keywords, $priorityBase);
+            if ($current % 10 === 0 || $current === $total) {
+                $emitProgress();
+            }
 
             foreach ($info[1] as $statement) {
                 $ai->addRoute($statement, $category, $info[0]);
+                $current++;
+                if ($current % 10 === 0 || $current === $total) {
+                    $emitProgress();
+                }
             }
         }
+
+        $emitProgress();
     }
 
     private static function normalizeKeywords(array $keywords, array $exclude = []): array
@@ -147,5 +208,116 @@ class SynthetiqBootstrap
         }
 
         return array_keys($normalized);
+    }
+
+    private static function resolveModelPath(string $modelDir, string $analyzerClass): string
+    {
+        $class = new \ReflectionClass($analyzerClass);
+        $modelName = Str::snake($class->getShortName());
+        return $modelDir . $modelName . '.phpml';
+    }
+
+    private static function emitProgress(?callable $progress, string $stage, string $message, array $meta = []): void
+    {
+        if (!$progress) {
+            return;
+        }
+
+        $payload = array_merge(['stage' => $stage, 'message' => $message], $meta);
+        $progress($stage, $message, $payload);
+    }
+
+    private static function buildIntentCacheKey(array $dialogue, array $intentBoosts, array $config): string
+    {
+        $payload = [
+            'dialogue' => $dialogue,
+            'intent_boosts' => $intentBoosts,
+            'grammar' => $config['grammar'] ?? [],
+            'tokens' => $config['tokens'] ?? [],
+            'routes' => $config['routes'] ?? [],
+            'intent_keywords' => $config['intent_keywords'] ?? [],
+        ];
+
+        $normalized = self::normalizeCachePayload($payload);
+        return sha1(json_encode($normalized));
+    }
+
+    private static function normalizeCachePayload($value)
+    {
+        if (!is_array($value)) {
+            return $value;
+        }
+
+        $isAssoc = array_keys($value) !== range(0, count($value) - 1);
+        if ($isAssoc) {
+            ksort($value);
+        }
+
+        $normalized = [];
+        foreach ($value as $key => $item) {
+            $normalized[$key] = self::normalizeCachePayload($item);
+        }
+
+        return $normalized;
+    }
+
+    private static function configureIntentRouter(SynthetIQ $ai, array $options): void
+    {
+        $matcher = self::readProtectedProperty($ai, '_matcher');
+        if (!$matcher) {
+            return;
+        }
+
+        $analyzer = self::readProtectedProperty($matcher, '_intentAnalyzer');
+        if (!$analyzer) {
+            return;
+        }
+
+        $router = new IntelligenceRouter($analyzer, $matcher, $options);
+        self::writeProtectedProperty($ai, '_intentClassifier', $router);
+    }
+
+    private static function warmIntentRouter(SynthetIQ $ai): void
+    {
+        $router = self::readProtectedProperty($ai, '_intentClassifier');
+        if (!$router) {
+            return;
+        }
+
+        try {
+            $router->score('bootstrap', new Context());
+        } catch (\Throwable $e) {
+            // ignore warmup errors; they will surface on real input
+        }
+    }
+
+    private static function readProtectedProperty(object $object, string $property)
+    {
+        try {
+            $reflection = new \ReflectionObject($object);
+            if (!$reflection->hasProperty($property)) {
+                return null;
+            }
+            $prop = $reflection->getProperty($property);
+            $prop->setAccessible(true);
+            return $prop->getValue($object);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    private static function writeProtectedProperty(object $object, string $property, $value): void
+    {
+        try {
+            $reflection = new \ReflectionObject($object);
+            if (!$reflection->hasProperty($property)) {
+                return;
+            }
+            $prop = $reflection->getProperty($property);
+            $prop->setAccessible(true);
+            $prop->setValue($object, $value);
+        } catch (\Throwable $e) {
+            return;
+        }
     }
 }

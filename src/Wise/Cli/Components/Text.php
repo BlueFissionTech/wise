@@ -14,7 +14,7 @@ class Text extends Component
 
     public function __construct(int $x = 0, int $y = 0, int $width = 10, int $height = 5, string $content = '', int $zIndex = 0, bool $overflow = false, bool $responsive = false)
     {
-        parent::__construct($x, $y, $width, $height, $content, 0);
+        parent::__construct($x, $y, $width, $height, $content, $zIndex);
         $this->_responsive = $responsive;
         $this->_overflow = $overflow;
 

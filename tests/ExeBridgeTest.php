@@ -40,7 +40,10 @@ final class ExeBridgeTest extends TestCase
 
         $result = $bridge->runSource('define @system as an object;', $context);
 
-        if (class_exists(\BlueFission\Jenerate\Runtime\Interpreter::class)) {
+        if (
+            class_exists(\BlueFission\Jenerator\Runtime\Interpreter::class)
+            || class_exists(\BlueFission\Jenerate\Runtime\Interpreter::class)
+        ) {
             $this->assertNotNull($result);
             return;
         }
