@@ -6,7 +6,8 @@
 - [x] Add a dynamic resource loader plus a Vibe-based messaging resource under `sys/`.
 - [x] Implement basic command input/output piping (file/stream/buffer) and tests.
 - [x] Add advanced piping features after directory scaffolding is proven (batch flows, multi-output routing, fixtures).
-- [ ] Add onboarding and conversational scripts in Vibe/JenSS (users, profiles, networks, dev setup, thinking prompts).
+- [x] Add onboarding and conversational scripts in Vibe/JenSS (users, profiles, networks, dev setup, thinking prompts).
+- [x] Add JenSS stress scripts for agent readiness, command suggestion training, resource output envelope shaping, and config parsing.
 - [ ] Add prompt hints and command suggestions (context-aware, spelling, resource-aware).
 - [ ] Reorder boot sequence (splash first, then progress/logs for training/config/setup, login prompt).
 - [ ] Wire Synthetiq adapter, Jenss primary interpreter, and Vibe bridge (`IBridge`) with intents and routes.

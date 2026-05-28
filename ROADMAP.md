@@ -25,6 +25,8 @@
 - Add base JenSS executables in `cmd/` with defined execution syntax.
 - Add dynamic resource loader and Vibe messaging resource in `sys/`.
 - Add onboarding and conversational scripts in Vibe/JenSS.
+- Add JenSS stress fixtures for environment readiness, command suggestion
+  training, resource event envelopes, and config parsing.
 
 ## Phase 4: Interpreter Alignment (green)
 - Wire Synthetiq adapter as the canonical prompt/template.
@@ -52,12 +54,12 @@
 - [ ] Add error-behavior tests for invalid syntax and recovery.
 - [ ] Add tests for resource routing and action dispatch.
 - [ ] Add tests for input/output piping (file, stream, buffer).
-- [ ] Scaffold `sys/`, `cmd/`, `usr/`, `dyn/`, `cfg/` and lock FileSystem root.
-- [ ] Define JenSS config overlay (`cfg/` and `usr/<user>/cfg`) and seed defaults.
-- [ ] Add JenSS executables in `cmd/` with defined execution syntax.
-- [ ] Add dynamic resource loader and Vibe messaging resource in `sys/`.
-- [ ] Add onboarding and conversational scripts in Vibe/JenSS.
-- [ ] Add interpreter contract tests (JenSS + Vibe) using fixtures.
+- [x] Scaffold `sys/`, `cmd/`, `usr/`, `dyn/`, `cfg/` and lock FileSystem root.
+- [x] Define JenSS config overlay (`cfg/` and `usr/<user>/cfg`) and seed defaults.
+- [x] Add JenSS executables in `cmd/` with defined execution syntax.
+- [x] Add dynamic resource loader and Vibe messaging resource in `sys/`.
+- [x] Add onboarding and conversational scripts in Vibe/JenSS.
+- [x] Add interpreter contract tests (JenSS + Vibe) using fixtures.
 - [ ] Wire Synthetiq adapter and set JenSS as default interpreter.
 - [ ] Integrate Vibe via `IBridge` and route via intents.
 - [ ] Add prompt hints and command suggestions.
