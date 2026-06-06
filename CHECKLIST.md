@@ -14,4 +14,4 @@
 - [ ] Define an ABS2/Holoscene memory adapter interface and shared access plan for Wise, Synthetiq, Jenerator, and Automata.
 - [ ] Implement working memory limits and identity partitions (global vs user) with permissions.
 - [ ] Align auth, roles, and permissions with Opus and allow injected auth providers.
-- [ ] Emit resource output events (unique output + waiting state) with metadata and documentation.
+- [x] Emit resource output events (unique output + waiting state) with metadata and documentation.

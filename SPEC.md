@@ -47,6 +47,9 @@ Provide a robust, extensible, conversational command shell and workspace for hum
 - Boot sequence shows splash, progress logging, and login prompt in order.
 - Working memory size is configurable at startup or mid-session.
 - Memory adapter supports ABS2/Holoscene sharing across Wise/Synthetiq/Jenerator.
+- Resource execution emits stable output envelopes with output ids, action,
+  status, waiting/completed flags, timestamps, preview/full output, and optional
+  semantic metadata.
 - Resource output events emit unique output plus waiting state and metadata.
 - Output refresh works reliably on Linux and Windows terminals.
 - ProcessManager handles multi-threaded or forked workloads safely.

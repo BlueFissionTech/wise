@@ -45,11 +45,31 @@ final class ExeBridgeTest extends TestCase
             || class_exists(\BlueFission\Jenerate\Runtime\Interpreter::class)
         ) {
             $this->assertNotNull($result);
+            $this->assertSame('wise://inline.jss', $result->meta()['path'] ?? null);
             return;
         }
 
         $this->assertFalse($result->successFlag());
         $this->assertStringContainsString('JenSS interpreter is not available', $result->output());
+    }
+
+    public function testJenssBridgeReturnsFailureForInvalidInlineSource(): void
+    {
+        if (
+            !class_exists(\BlueFission\Jenerator\Runtime\Interpreter::class)
+            && !class_exists(\BlueFission\Jenerate\Runtime\Interpreter::class)
+        ) {
+            $this->markTestSkipped('JenSS interpreter not available.');
+        }
+
+        $bridge = new JenssBridge();
+        $context = new BridgeContext();
+
+        $result = $bridge->runSource('use @system from ;', $context, 'bad-inline.jss');
+
+        $this->assertFalse($result->successFlag());
+        $this->assertStringContainsString('JenSS execution failed:', $result->output());
+        $this->assertSame('bad-inline.jss', $result->meta()['path'] ?? null);
     }
 
     public function testVibeBridgeReportsMissingDependency(): void

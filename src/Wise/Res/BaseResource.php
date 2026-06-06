@@ -32,6 +32,7 @@ abstract class BaseResource extends Service {
     protected array $_outputMeta = [];
     protected ?string $_lastOutputHash = null;
     protected ?string $_lastOptionsHash = null;
+    protected ?string $_currentAction = null;
     protected int $_outputPreviewLines = 3;
     protected int $_outputPreviewChars = 240;
     protected int $_outputFullMax = 2000;
@@ -60,6 +61,7 @@ abstract class BaseResource extends Service {
     {
         $this->resetOutputTracking();
         $action = $behavior->name();
+        $this->_currentAction = $action;
 
         $actions = [];
         foreach ($this->_actions as $verb) {
@@ -1078,16 +1080,16 @@ abstract class BaseResource extends Service {
 
         $preview = $this->buildOutputPreview($output);
         $markdown = Dev::apply('wise.resource.output.markdown', $preview['text']);
+        $options = $this->expectedOptionsForOutput($output);
 
         $payload = array_merge([
-            'resource' => $this->_name,
             'output' => $preview['text'],
             'lines' => $preview['lines'],
             'truncated' => $preview['truncated'],
             'length' => strlen($output),
             'markdown' => $markdown,
             'hash' => $hash,
-        ], $this->buildFullOutputMeta($output), $this->_outputMeta);
+        ], $this->buildFullOutputMeta($output), $this->_outputMeta, $this->buildEventEnvelope($hash, $options));
 
         $payload = Dev::apply('wise.resource.output.meta', $payload);
 
@@ -1105,13 +1107,17 @@ abstract class BaseResource extends Service {
     protected function emitOutputRefreshEvent(string $output): void
     {
         $preview = $this->buildOutputPreview($output);
+        $hash = sha1($output);
+        $options = $this->expectedOptionsForOutput($output);
         $payload = array_merge([
-            'resource' => $this->_name,
             'output' => $preview['text'],
             'lines' => $preview['lines'],
             'truncated' => $preview['truncated'],
             'length' => strlen($output),
-        ], $this->buildFullOutputMeta($output), $this->_outputMeta);
+            'hash' => $hash,
+        ], $this->buildFullOutputMeta($output), $this->_outputMeta, $this->buildEventEnvelope($hash, $options), [
+            'repeated' => true,
+        ]);
 
         $payload = Dev::apply('wise.resource.output.refresh.meta', $payload);
 
@@ -1132,10 +1138,7 @@ abstract class BaseResource extends Service {
             return;
         }
 
-        $options = $this->_expectedOptions;
-        if ($options === []) {
-            $options = $this->extractOptionsFromResponse($output);
-        }
+        $options = $this->expectedOptionsForOutput($output);
 
         if ($options === []) {
             return;
@@ -1148,10 +1151,9 @@ abstract class BaseResource extends Service {
         $this->_lastOptionsHash = $hash;
 
         $payload = array_merge([
-            'resource' => $this->_name,
             'state' => 'waiting',
             'options' => $options,
-        ], $this->_expectedOptionsMeta);
+        ], $this->_expectedOptionsMeta, $this->buildWaitingEnvelope(sha1($output), $options));
 
         $payload = Dev::apply('wise.resource.waiting.meta', $payload);
 
@@ -1193,6 +1195,77 @@ abstract class BaseResource extends Service {
         }
 
         return [];
+    }
+
+    protected function expectedOptionsForOutput(string $output): array
+    {
+        if ($this->_expectedOptions !== []) {
+            return $this->_expectedOptions;
+        }
+
+        return $this->extractOptionsFromResponse($output);
+    }
+
+    protected function buildEventEnvelope(string $outputHash, array $options = []): array
+    {
+        $status = $this->eventStatus($options);
+        $envelope = [
+            'output_id' => $this->outputId($outputHash),
+            'resource' => $this->_name,
+            'resource_name' => $this->_name,
+            'action' => $this->_currentAction ?? 'unknown',
+            'status' => $status,
+            'waiting' => $status === 'waiting',
+            'completed' => $status !== 'waiting',
+            'timestamp' => date('c'),
+            'repeated' => false,
+        ];
+
+        if (array_key_exists('status', $this->_outputMeta)) {
+            $envelope['resource_status'] = $this->_outputMeta['status'];
+        }
+
+        if (!array_key_exists('semantic_metadata', $this->_outputMeta)) {
+            $envelope['semantic_metadata'] = null;
+        }
+
+        return $envelope;
+    }
+
+    protected function buildWaitingEnvelope(string $outputHash, array $options): array
+    {
+        return [
+            'output_id' => $this->outputId($outputHash),
+            'resource' => $this->_name,
+            'resource_name' => $this->_name,
+            'action' => $this->_currentAction ?? 'unknown',
+            'status' => 'waiting',
+            'waiting' => true,
+            'completed' => false,
+            'timestamp' => date('c'),
+            'options_hash' => sha1(implode('|', $options)),
+        ];
+    }
+
+    protected function outputId(string $outputHash): string
+    {
+        $source = implode('|', [
+            $this->_name,
+            $this->_currentAction ?? 'unknown',
+            $outputHash,
+        ]);
+
+        return 'wise-out-' . substr(sha1($source), 0, 16);
+    }
+
+    protected function eventStatus(array $options): string
+    {
+        if (($this->_outputMeta['output_type'] ?? null) === 'error'
+            || array_key_exists('error', $this->_outputMeta)) {
+            return 'error';
+        }
+
+        return $options === [] ? 'completed' : 'waiting';
     }
 
     protected function extractOptionsFromResponse(string $response): array
