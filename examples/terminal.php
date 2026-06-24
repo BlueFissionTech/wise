@@ -48,14 +48,15 @@ use BlueFission\IPC\IPC;
 use BlueFission\Data\Queues\MemQueue;
 
 $rootPath = dirname(__DIR__);
-$virtualRoot = getenv('WISE_FS_ROOT') ?: ($rootPath . DIRECTORY_SEPARATOR . 'examples' . DIRECTORY_SEPARATOR . 'root');
-$sessionLocation = $rootPath . DIRECTORY_SEPARATOR . 'artifacts';
-if (!is_dir($sessionLocation)) {
-    (new FileSystem(['root' => $rootPath, 'filter' => []]))->mkdir('artifacts');
-}
-
 require $rootPath . '/vendor/autoload.php';
 require_once $rootPath . '/src/Wise/Support/store.php';
+
+$virtualRoot = getenv('WISE_FS_ROOT') ?: ($rootPath . DIRECTORY_SEPARATOR . 'examples' . DIRECTORY_SEPARATOR . 'root');
+$sessionLocation = $rootPath . DIRECTORY_SEPARATOR . 'artifacts';
+$sessionDirectory = new FileSystem(['root' => $rootPath, 'filter' => []]);
+if (!$sessionDirectory->exists($sessionLocation)) {
+    $sessionDirectory->mkdir('artifacts');
+}
 
 // ini_set('display_errors', 1);
 // ini_set('display_startup_errors', 1);
