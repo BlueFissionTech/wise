@@ -2,10 +2,11 @@
 
 namespace BlueFission\Tests\Examples;
 
+use BlueFission\Automata\LLM\Clients\IClient;
+use BlueFission\Automata\LLM\Reply;
 use BlueFission\Wise\Exe\BridgeContext;
 use BlueFission\Wise\Exe\BridgeRegistry;
 use BlueFission\Wise\Exe\JenssBridge;
-use BlueFission\Wise\Exe\NullLlmClient;
 use BlueFission\Wise\Exe\VibeBridge;
 use PHPUnit\Framework\TestCase;
 
@@ -91,13 +92,25 @@ final class ExampleBridgeSmokeTest extends TestCase
             null,
             null,
             null,
-            new NullLlmClient()
+            new ExampleFixtureLlmClient($this->generatedResponsesForExample($relativePath))
         );
 
         $result = $bridge->runFile($path, $context);
 
         $this->assertTrue($result->successFlag(), $relativePath . ': ' . $result->output());
         $this->assertSame($path, $result->meta()['path'] ?? null);
+
+        $vars = $result->meta()['variables'] ?? [];
+        if ($relativePath === 'cmd/onboard.vibe') {
+            $this->assertSame('Example User', $vars['name'] ?? null);
+            $this->assertSame('engineering', $vars['focus'] ?? null);
+            $this->assertStringContainsString('Next action:', $result->output());
+        }
+        if ($relativePath === 'cmd/strategy.vibe') {
+            $this->assertSame('example modernization', $vars['topic'] ?? null);
+            $this->assertSame('review', $vars['mode'] ?? null);
+            $this->assertStringContainsString('Plan:', $result->output());
+        }
     }
 
     public static function bridgeExampleProvider(): array
@@ -242,5 +255,64 @@ final class ExampleBridgeSmokeTest extends TestCase
         }
 
         return $common;
+    }
+
+    private function generatedResponsesForExample(string $relativePath): array
+    {
+        return match ($relativePath) {
+            'cmd/onboard.vibe' => [
+                'Example User',
+                'operator',
+                'engineering',
+                'neutral',
+                'verify Wise examples',
+                'none',
+                'run the focused smoke tests',
+            ],
+            'cmd/strategy.vibe' => [
+                'example modernization',
+                'review',
+                'local deterministic fixture',
+                'no network and no credentials',
+                'JenSS, Vibe, bridge registry',
+                'examples remain executable',
+                "1. Run bridge smoke\n2. Run batch terminal\n3. Run PHPUnit",
+                'run the focused smoke tests',
+            ],
+            default => [],
+        };
+    }
+}
+
+final class ExampleFixtureLlmClient implements IClient
+{
+    private array $responses;
+
+    public function __construct(array $responses)
+    {
+        $this->responses = $responses;
+    }
+
+    public function generate($input, $config = [], ?callable $callback = null): Reply
+    {
+        $response = (string)(array_shift($this->responses) ?? 'generated fixture response');
+        if ($callback) {
+            $callback($response);
+        }
+
+        $reply = new Reply();
+        $reply->addMessage($response);
+
+        return $reply;
+    }
+
+    public function complete($input, $config = []): Reply
+    {
+        return $this->generate($input, $config);
+    }
+
+    public function respond($input, $config = []): Reply
+    {
+        return $this->generate($input, $config);
     }
 }

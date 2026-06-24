@@ -6,10 +6,44 @@ declare(strict_types=1);
 use BlueFission\Wise\Exe\BridgeContext;
 use BlueFission\Wise\Exe\BridgeRegistry;
 use BlueFission\Wise\Exe\JenssBridge;
-use BlueFission\Wise\Exe\NullLlmClient;
 use BlueFission\Wise\Exe\VibeBridge;
+use BlueFission\Automata\LLM\Clients\IClient;
+use BlueFission\Automata\LLM\Reply;
 
 require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php';
+
+final class ExampleFixtureLlmClient implements IClient
+{
+    private array $responses;
+
+    public function __construct(array $responses)
+    {
+        $this->responses = $responses;
+    }
+
+    public function generate($input, $config = [], ?callable $callback = null): Reply
+    {
+        $response = (string)(array_shift($this->responses) ?? 'generated fixture response');
+        if ($callback) {
+            $callback($response);
+        }
+
+        $reply = new Reply();
+        $reply->addMessage($response);
+
+        return $reply;
+    }
+
+    public function complete($input, $config = []): Reply
+    {
+        return $this->generate($input, $config);
+    }
+
+    public function respond($input, $config = []): Reply
+    {
+        return $this->generate($input, $config);
+    }
+}
 
 $exampleRoot = __DIR__ . DIRECTORY_SEPARATOR . 'root';
 $registry = new BridgeRegistry();
@@ -47,10 +81,17 @@ foreach (exampleFiles($exampleRoot) as $path) {
         null,
         promptResponder(),
         null,
-        new NullLlmClient()
+        new ExampleFixtureLlmClient(generatedResponsesForExample($relativePath))
     );
 
-    $result = $bridge->runFile($path, $context);
+    try {
+        $result = $bridge->runFile($path, $context);
+    } catch (\Throwable $exception) {
+        $failures++;
+        $results[] = ['fail', $relativePath, $exception->getMessage()];
+        continue;
+    }
+
     if ($result->successFlag()) {
         $results[] = ['ok', $relativePath, $bridge->name()];
         continue;
@@ -200,4 +241,33 @@ function varsForExample(string $relativePath): array
     }
 
     return $common;
+}
+
+/**
+ * @return array<int, string>
+ */
+function generatedResponsesForExample(string $relativePath): array
+{
+    return match ($relativePath) {
+        'cmd/onboard.vibe' => [
+            'Example User',
+            'operator',
+            'engineering',
+            'neutral',
+            'verify Wise examples',
+            'none',
+            'run the focused smoke tests',
+        ],
+        'cmd/strategy.vibe' => [
+            'example modernization',
+            'review',
+            'local deterministic fixture',
+            'no network and no credentials',
+            'JenSS, Vibe, bridge registry',
+            'examples remain executable',
+            "1. Run bridge smoke\n2. Run batch terminal\n3. Run PHPUnit",
+            'run the focused smoke tests',
+        ],
+        default => [],
+    };
 }

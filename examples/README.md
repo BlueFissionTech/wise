@@ -11,16 +11,18 @@ run on a clean checkout.
 - `batch-commands.txt` is a minimal non-interactive command stream for smoke
   testing the terminal entrypoint.
 - `bridge-smoke.php` executes the example JenSS and Vibe files through the
-  bridge contracts without starting an interactive terminal session.
+  bridge contracts without starting an interactive terminal session. Vibe runs
+  use a deterministic fixture LLM so `{=...}` prompt/generation points stay
+  executable without network access.
 - `root/cmd` contains command scripts that are resolved from the virtual
   filesystem.
 - `root/cfg` and `root/usr/console/cfg` contain system and user config overlays.
 - `root/sys/res` contains scripted resource templates.
 
-Advanced JenSS intelligence namespaces are intentionally not used by the Wise
-runtime examples until they are packaged as executable modules. Keep those ideas
-as parser-surface fixtures in the interpreter project; Wise examples should run
-through the installed bridge contracts.
+Vibe examples should preserve prompt-as-code behavior. Use `{=...}` for
+generation or prompt/tool-backed decisions, `{$...}` only for values that are
+already known in the current context, and `Reader::run(['run_backend' => false])`
+for deterministic smoke execution.
 
 ## Smoke Checks
 

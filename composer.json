@@ -36,13 +36,6 @@
         },
         {
             "type": "path",
-            "url": "D:/projects/jenss-interpreter",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
             "url": "D:/projects/vibe-interpreter",
             "options": {
                 "symlink": true
@@ -121,8 +114,8 @@
         ]
     },
     "autoload-dev": {
-        "psr-4": { 
-            "BlueFission\\Tests\\": "tests/" 
+        "psr-4": {
+            "BlueFission\\Tests\\": "tests/"
         }
     },
     "scripts": {

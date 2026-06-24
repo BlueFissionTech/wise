@@ -1,17 +1,23 @@
 {#comment}
-Onboarding summary for Wise shell setup.
+Onboarding conversation for Wise shell setup.
 {/comment}
 
 {#instruct}
-Summarize the provided setup preferences and end with a clear next action.
+You are Wise onboarding. Ask concise questions, generate profile defaults when
+needed, and summarize preferences. Use short responses and end with a clear
+next action.
 {/instruct}
 
-User name: {$name}
-Role: {$role}
-Focus: {$focus}
-Preferred tone: {$tone}
-Primary goal: {$goal}
-Optional resource to consult: {$resource}
+{#let focuses=["engineering","administration","productivity","creativity"]}
+{#let tones=["neutral","friendly","concise","analytical"]}
+{#let resources=["news","howto","wiki","web","none"]}
+
+User name: {=name max_tokens=20 temperature=0}
+Role: {=role max_tokens=20 temperature=0}
+Focus: {=focus:text -> $.trim().lower() options=focuses default="engineering" max_tokens=20 temperature=0}
+Preferred tone: {=tone:text -> $.trim().lower() options=tones default="neutral" max_tokens=20 temperature=0}
+Primary goal: {=goal max_tokens=60 temperature=0}
+Optional resource to consult: {=resource:text -> $.trim().lower() options=resources default="none" max_tokens=20 temperature=0}
 
 Summary:
 - Name: {$name}
@@ -21,4 +27,4 @@ Summary:
 - Goal: {$goal}
 - Resource: {$resource}
 
-Next action: {$nextAction}
+Next action: {=nextAction max_tokens=40 temperature=0}
