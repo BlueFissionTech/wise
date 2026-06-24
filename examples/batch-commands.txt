@@ -1,0 +1,4 @@
+hello
+status
+resource-event
+exit

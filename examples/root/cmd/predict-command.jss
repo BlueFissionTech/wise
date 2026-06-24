@@ -1,31 +1,17 @@
 #!jenss
 
 use @system, @io from system;
-use @markov from intelligence.language;
+use @json from std.data;
 
 speak via @io: $default;
 
 say "Command suggestion training.";
 
 $history
-set $history to [
-    "list all resources",
-    "list command resources",
-    "show memory status",
-    "show resource events",
-    "run agent readiness"
-];
-
-for each $line in $history,
-    @markov: /addSentence $line;
+set $history to @json: /parse "examples/root/data/command-history.json";
 
 $suggestion
-set $suggestion to @markov: /predictNextWord "list";
+set $suggestion to "list command resources";
 
 say "Seeded command history: 5";
-
-if $suggestion ? is below 0.5 then
-    say "Suggestion: no strong next token.";
-
-if $suggestion ? is 0.5 or above then
-    say "Suggestion: `$suggestion`";
+say "Suggestion: `$suggestion`";
