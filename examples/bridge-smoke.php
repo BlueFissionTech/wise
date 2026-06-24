@@ -7,6 +7,7 @@ use BlueFission\Wise\Exe\BridgeContext;
 use BlueFission\Wise\Exe\BridgeRegistry;
 use BlueFission\Wise\Exe\JenssBridge;
 use BlueFission\Wise\Exe\VibeBridge;
+use BlueFission\Str;
 use BlueFission\Automata\LLM\Clients\IClient;
 use BlueFission\Automata\LLM\Reply;
 
@@ -98,7 +99,7 @@ foreach (exampleFiles($exampleRoot) as $path) {
     }
 
     $failures++;
-    $results[] = ['fail', $relativePath, trim($result->output())];
+    $results[] = ['fail', $relativePath, Str::trim($result->output())];
 }
 
 foreach ($results as [$status, $path, $detail]) {

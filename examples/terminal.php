@@ -32,6 +32,7 @@ use BlueFission\Cli\Util\Tty;
 use BlueFission\Cli\Util\ProgressBar;
 use BlueFission\Cli\Util\StatusBar;
 use BlueFission\Async\{Heap, Thread, Fork};
+use BlueFission\Data\FileSystem;
 use BlueFission\Data\Storage\{Disk, Memory, SQLite};
 use BlueFission\Automata\Language\{
 	Interpreter,
@@ -50,7 +51,7 @@ $rootPath = dirname(__DIR__);
 $virtualRoot = getenv('WISE_FS_ROOT') ?: ($rootPath . DIRECTORY_SEPARATOR . 'examples' . DIRECTORY_SEPARATOR . 'root');
 $sessionLocation = $rootPath . DIRECTORY_SEPARATOR . 'artifacts';
 if (!is_dir($sessionLocation)) {
-    mkdir($sessionLocation, 0777, true);
+    (new FileSystem(['root' => $rootPath, 'filter' => []]))->mkdir('artifacts');
 }
 
 require $rootPath . '/vendor/autoload.php';
