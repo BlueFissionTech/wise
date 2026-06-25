@@ -5,6 +5,7 @@ namespace BlueFission\Wise\Exe;
 use BlueFission\Behavioral\Behaviors\Event;
 use BlueFission\Behavioral\Behaviors\Meta;
 use BlueFission\Obj;
+use BlueFission\Parsing\Registry\GeneratorRegistry;
 
 class VibeBridge extends Obj implements IBridge
 {
@@ -37,7 +38,7 @@ class VibeBridge extends Obj implements IBridge
             $llm = new NullLlmClient();
         }
 
-        $reader = new \BlueFission\Vibrato\Reader($llm);
+        $reader = $this->reader($llm);
         $includePaths = $context->includePaths();
         if ($includePaths !== []) {
             $reader->setIncludePaths($includePaths);
@@ -45,7 +46,7 @@ class VibeBridge extends Obj implements IBridge
         $this->applyContextVars($reader, $context->vars());
         $reader->inputFile($path);
 
-        $vars = $reader->run();
+        $vars = $reader->run(['run_backend' => false]);
         $result = BridgeResult::success($reader->output(), [
             'path' => $path,
             'variables' => $vars,
@@ -67,7 +68,7 @@ class VibeBridge extends Obj implements IBridge
             $llm = new NullLlmClient();
         }
 
-        $reader = new \BlueFission\Vibrato\Reader($llm);
+        $reader = $this->reader($llm);
         $includePaths = $context->includePaths();
         if ($includePaths !== []) {
             $reader->setIncludePaths($includePaths);
@@ -75,7 +76,7 @@ class VibeBridge extends Obj implements IBridge
         $this->applyContextVars($reader, $context->vars());
         $reader->input($source);
 
-        $vars = $reader->run();
+        $vars = $reader->run(['run_backend' => false]);
         $result = BridgeResult::success($reader->output(), [
             'path' => $path,
             'variables' => $vars,
@@ -84,9 +85,24 @@ class VibeBridge extends Obj implements IBridge
         return $result;
     }
 
+    private function reader($llm): object
+    {
+        if (class_exists(GeneratorRegistry::class)
+            && class_exists(\BlueFission\Vibrato\Interpreter\VibeRefAwareGenerator::class)) {
+            GeneratorRegistry::set(new \BlueFission\Vibrato\Interpreter\VibeRefAwareGenerator());
+        }
+
+        return new \BlueFission\Vibrato\Reader($llm);
+    }
+
     private function applyContextVars(object $reader, array $vars): void
     {
         if ($vars === []) {
+            return;
+        }
+
+        if (method_exists($reader, 'setVariables')) {
+            $reader->setVariables($vars);
             return;
         }
 
@@ -94,8 +110,8 @@ class VibeBridge extends Obj implements IBridge
             $property = new \ReflectionProperty($reader, 'vars');
             $property->setAccessible(true);
             $property->setValue($reader, $vars);
-        } catch (\Throwable $e) {
-            // Ignore if the reader doesn't expose vars.
+        } catch (\Throwable) {
+            // Older Reader builds may not expose a variable injection point.
         }
     }
 
