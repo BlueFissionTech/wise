@@ -4,6 +4,7 @@ namespace BlueFission\Wise\Nav;
 
 use BlueFission\SynthetIQ\SynthetIQ;
 use BlueFission\SynthetIQ\Intents\IntelligenceRouter;
+use BlueFission\SynthetIQ\Intents\Classifier as SynthetiqIntentClassifier;
 use BlueFission\SynthetIQ\Memory\MemoryAdapterInterface;
 use BlueFission\Automata\Language\{Interpreter, Grammar, StemmerLemmatizer, Walker};
 use BlueFission\Automata\Analysis\KeywordTopicAnalyzer;
@@ -95,6 +96,7 @@ class SynthetiqBootstrap
         self::emitProgress($progress, 'analyzer', 'Preparing intent analyzer...');
         $analyzer = new KeywordTopicAnalyzer(new NaiveBayesTextClassification, $modelDir);
         $ai = new SynthetIQ($interpreter, $analyzer);
+        self::stabilizePredictors($ai);
 
         $memoryAdapter = $config['memory_adapter'] ?? null;
         if ($memoryAdapter instanceof MemoryAdapterInterface) {
@@ -275,7 +277,18 @@ class SynthetiqBootstrap
             return;
         }
 
-        $router = new IntelligenceRouter($analyzer, $matcher, $options);
+        $router = null;
+        if (class_exists(IntelligenceRouter::class)) {
+            $router = new IntelligenceRouter($analyzer, $matcher, $options);
+        } elseif (class_exists(SynthetiqIntentClassifier::class)) {
+            $router = new SynthetiqIntentClassifier($analyzer);
+            self::writeProtectedProperty($router, '_matcher', $matcher);
+        }
+
+        if (!$router) {
+            return;
+        }
+
         self::writeProtectedProperty($ai, '_intentClassifier', $router);
     }
 
@@ -291,6 +304,70 @@ class SynthetiqBootstrap
         } catch (\Throwable $e) {
             // ignore warmup errors; they will surface on real input
         }
+    }
+
+    private static function stabilizePredictors(SynthetIQ $ai): void
+    {
+        $predictor = self::readProtectedProperty($ai, '_predictor');
+        if (!is_object($predictor) || self::predictorWorks($predictor)) {
+            return;
+        }
+
+        $safePredictor = self::nullPredictor();
+        self::writeProtectedProperty($ai, '_predictor', $safePredictor);
+        self::writeProtectedProperty($ai, '_learningModel', null);
+
+        $selector = self::readProtectedProperty($ai, '_responseSelector');
+        if (is_object($selector)) {
+            self::writeProtectedProperty($selector, '_predictor', $safePredictor);
+        }
+    }
+
+    private static function predictorWorks(object $predictor): bool
+    {
+        if (!method_exists($predictor, 'addSentence')) {
+            return true;
+        }
+
+        try {
+            $class = get_class($predictor);
+            $probe = new $class();
+            $probe->addSentence('wise bootstrap predictor probe');
+
+            if (method_exists($probe, 'predictNextWords')) {
+                $probe->predictNextWords('wise');
+            } elseif (method_exists($probe, 'predictNextWord')) {
+                $probe->predictNextWord('wise');
+            }
+
+            return true;
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    private static function nullPredictor(): object
+    {
+        return new class {
+            public function addSentence(string $sentence): void
+            {
+            }
+
+            public function predictBeginning(): string
+            {
+                return '';
+            }
+
+            public function predictNextWords(string $input): array
+            {
+                return [];
+            }
+
+            public function predictNextWord(string $input): ?string
+            {
+                return null;
+            }
+        };
     }
 
     private static function readProtectedProperty(object $object, string $property)
