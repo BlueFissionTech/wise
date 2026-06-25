@@ -4,6 +4,7 @@ Thumbs.db
 
 # Composer dependencies
 /vendor/
+/.composer-cache/
 
 /composer.lock
 
@@ -148,3 +149,11 @@ logs
 # Ignore the script output files
 /speech.mp3
 /speech.wav
+# Blue Fission Codex harness
+/docker/
+/scripts/
+/artifacts/
+/.codex/
+/AGENTS.md
+/AGENTS.behavior.md
+/harness.json

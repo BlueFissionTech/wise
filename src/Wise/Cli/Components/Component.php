@@ -120,7 +120,7 @@ class Component implements IDrawable
                 $parsedChildLine = ConsoleDisplayUtil::parseAnsiCodes($line);
                 $childLineContent = $parsedChildLine['content'];
 
-                $lineLength = mb_strlen($line);
+                $lineLength = mb_strlen($childLineContent);
                 if (isset($lines[$childY + $index])) {
                     $parsedCurrentLine = ConsoleDisplayUtil::parseAnsiCodes($lines[$childY + $index]);
                     $currentLineContent = $parsedCurrentLine['content'];
@@ -215,7 +215,7 @@ class Component implements IDrawable
 
     public function removeChild(IDrawable $child): void
     {
-        $this->_children->filter(fn($c) => $c !== $child);
+        $this->_children = $this->_children->filter(fn($c) => $c !== $child);
         $child->setParent(null);
     }
 

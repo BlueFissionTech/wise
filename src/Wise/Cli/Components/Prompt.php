@@ -25,7 +25,7 @@ class Prompt extends Component
 
     public function updateContent(string $content): void
     {
-        $this->_content->val($content);
+        $this->setContent($content);
     }
 
     public function update(): void
@@ -75,6 +75,7 @@ class Prompt extends Component
     public function setContext(string $path): bool
     {
         $this->_context = $path;
+        return true;
     }
 
     public function getLength(): int

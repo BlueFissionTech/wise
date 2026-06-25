@@ -2,8 +2,11 @@
 
 namespace BlueFission\Wise\Cmd;
 
+use BlueFission\Arr;
 use BlueFission\Wise\Arc\Kernel;
 use BlueFission\Data\FileSystem;
+use BlueFission\Wise\Res\ResourceHelper;
+use BlueFission\Behavioral\Behaviors\Behavior;
 
 class CommandHandler {
     protected $_aliases = [];
@@ -19,15 +22,18 @@ class CommandHandler {
     public function canHandle($command) {
         // Check if the command is a native command or an alias
         $commandName = explode(' ', $command)[0];
+        if ($this->shouldDeferToResource($commandName, $command)) {
+            return false;
+        }
         return isset($this->_aliases[$commandName]) || method_exists($this, $commandName);
     }
 
     public function handle($command) {
         // Parse the command and execute the corresponding method
         
-        $parts = explode(' ', $command);
-        $commandName = array_shift($parts);
-        $args = $parts;
+        $parts = Arr::make(explode(' ', $command));
+        $commandName = $parts->shift();
+        $args = $parts->val();
 
         if (isset($this->_aliases[$commandName])) {
             $commandName = $this->_aliases[$commandName];
@@ -60,11 +66,17 @@ class CommandHandler {
         $this->registerAlias('echo', 'echo');
         $this->registerAlias('clear', 'clearScreen');
         $this->registerAlias('exit', 'exit');
+        $this->registerAlias('mem', 'memory');
         // Add more aliases as needed
     }
 
     // Define internal commands
-    public function listDir($dir = null) {
+    public function listDir(...$args) {
+        if ($this->isResourceCommand($args)) {
+            return $this->dispatchResourceHelper('list', $this->extractResourceArgs($args));
+        }
+
+        $dir = $args[0] ?? null;
         return $this->_kernel->listDir($dir);
     }
 
@@ -88,7 +100,12 @@ class CommandHandler {
         return $this->_kernel->deleteFile($file);
     }
 
-    public function readFile($file) {
+    public function readFile(...$args) {
+        if ($this->isResourceCommand($args)) {
+            return $this->dispatchResourceHelper('show', $this->extractResourceArgs($args));
+        }
+
+        $file = $args[0] ?? null;
         return $this->_kernel->readFile($file);
     }
 
@@ -104,7 +121,11 @@ class CommandHandler {
         return $message;
     }
 
-    public function help() {
+    public function help(...$args) {
+        if ($this->isResourceCommand($args)) {
+            return $this->dispatchResourceHelper('help', $this->extractResourceArgs($args));
+        }
+
         return "Available commands: list (ls), changeDirectory (cd), delete (rm), view (cat), echo";
     }
 
@@ -118,9 +139,150 @@ class CommandHandler {
         return '';
     }
 
+    public function memory($scope = null, $size = null)
+    {
+        if (!$this->_kernel->hasWorkingMemory()) {
+            return 'Working memory is not configured.';
+        }
+
+        $scope = $scope ? strtolower($scope) : null;
+        $size = $size !== null ? strtolower((string)$size) : null;
+
+        if ($scope === null || $scope === 'status') {
+            return $this->memoryStatus();
+        }
+
+        if (is_numeric($scope)) {
+            $size = $scope;
+            $scope = 'user';
+        } elseif ($scope === 'max') {
+            $scope = 'user';
+        }
+
+        if (!in_array($scope, ['user', 'global'], true)) {
+            return 'Usage: memory [user|global] [size|off]';
+        }
+
+        if ($scope === 'global' && !$this->canManageGlobalMemory()) {
+            return 'Insufficient permissions to modify global memory.';
+        }
+
+        $parsedSize = $this->parseMemorySize($size);
+        $ownerId = null;
+        if ($scope === 'user') {
+            $ownerId = $this->_kernel->profile()?->id();
+        }
+
+        $this->_kernel->setWorkingMemoryMaxSize($scope, $parsedSize, $ownerId);
+        $current = $this->_kernel->workingMemoryMaxSize($scope, $ownerId);
+        $label = $current !== null ? (string)$current : 'unlimited';
+
+        return "Working memory {$scope} max size set to {$label}.";
+    }
+
     public function exit() {
         exit;
     }
 
     // Add more internal commands as needed
+
+    private function memoryStatus(): string
+    {
+        $userId = $this->_kernel->profile()?->id();
+        $userSize = $this->_kernel->workingMemoryMaxSize('user', $userId);
+        $globalSize = $this->_kernel->workingMemoryMaxSize('global');
+
+        $userLabel = $userSize !== null ? (string)$userSize : 'unlimited';
+        $globalLabel = $globalSize !== null ? (string)$globalSize : 'unlimited';
+
+        return "Working memory max size (user: {$userLabel}, global: {$globalLabel}).";
+    }
+
+    private function canManageGlobalMemory(): bool
+    {
+        $profile = $this->_kernel->profile();
+        if (!$profile) {
+            return false;
+        }
+
+        return $profile->hasRole('admin') || $profile->hasRole('system');
+    }
+
+    private function parseMemorySize(?string $size): ?int
+    {
+        if ($size === null || $size === '' || $size === 'off' || $size === 'none') {
+            return null;
+        }
+
+        if (!is_numeric($size)) {
+            return null;
+        }
+
+        $parsed = (int)$size;
+        return $parsed > 0 ? $parsed : null;
+    }
+
+    private function isResourceCommand(array $args): bool
+    {
+        foreach ($args as $arg) {
+            $value = strtolower((string)$arg);
+            if ($value === 'resource' || $value === 'resources') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function shouldDeferToResource(string $commandName, string $command): bool
+    {
+        $commandName = strtolower($commandName);
+        if (!in_array($commandName, ['list', 'show', 'help'], true)) {
+            return false;
+        }
+
+        $parts = preg_split('/\s+/', trim($command));
+        foreach ($parts as $part) {
+            $part = strtolower($part);
+            if ($part === 'resource' || $part === 'resources') {
+                return false;
+            }
+        }
+
+        $parser = new CommandParser();
+        $parsed = $parser->parse($command);
+        if (!$parsed->verb || $parsed->verb !== $commandName) {
+            return false;
+        }
+
+        $resource = $parsed->resources[0] ?? null;
+        if (!$resource || $resource === 'resource') {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function extractResourceArgs(array $args): array
+    {
+        $filtered = [];
+        foreach ($args as $arg) {
+            $value = strtolower((string)$arg);
+            if ($value === 'resource' || $value === 'resources' || $value === 'all') {
+                continue;
+            }
+            $filtered[] = $arg;
+        }
+
+        return $filtered;
+    }
+
+    private function dispatchResourceHelper(string $action, array $args): string
+    {
+        $helper = new ResourceHelper();
+        $behavior = new Behavior($action);
+        $helper->handle($behavior, $args);
+
+        return $helper->response() ?? '';
+    }
 }

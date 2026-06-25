@@ -2,6 +2,7 @@
 namespace BlueFission\Wise\Cmd;
 
 
+use BlueFission\Arr;
 use BlueFission\Automata\Language\Grammar;
 use BlueFission\Automata\Language\SyntaxTreeWalker;
 use BlueFission\Automata\Language\EntityExtractor;
@@ -9,6 +10,7 @@ use BlueFission\Data\Storage\Storage;
 use BlueFission\Automata\LLM\Prompts\ConsoleResponse;
 use BlueFission\Automata\LLM\Clients\IClient;
 use BlueFission\Services\Application as App;
+use BlueFission\Wise\Nav\INavigator;
 
 class CommandProcessor
 {
@@ -18,6 +20,7 @@ class CommandProcessor
     protected $_grammar;
     protected $_llmClient;
     protected $_name;
+    protected $_navigator;
 
     protected $_availableCommands = [];
 
@@ -28,7 +31,7 @@ class CommandProcessor
 
     protected $_keywords = [];
 
-    public function __construct(Storage $storage, IClient $llmClient = null)
+    public function __construct(Storage $storage, IClient $llmClient = null, INavigator $navigator = null)
     {
         $this->setKeywords();
         $this->_parser = new CommandParser();
@@ -37,6 +40,7 @@ class CommandProcessor
         $this->_storage->activate();
 
         $this->_llmClient = $llmClient;
+        $this->_navigator = $navigator;
 
         $this->_name = $this->_app->name();
 
@@ -71,7 +75,7 @@ class CommandProcessor
         $input = trim($input);
 
         if (!empty($this->_storage->confirmCmd)) {
-            if (in_array(strtolower($input), $this->responseWords['yes'])) {
+            if (in_array(strtolower($input), $this->_responseWords['yes'], true)) {
                 $command = $this->convertToCommand($this->_storage->confirmCmd);
                 unset($this->_storage->currentCmd);
 
@@ -81,7 +85,7 @@ class CommandProcessor
                 $this->addToHistory($accept);
 
                 $input = "";
-            } elseif (in_array(strtolower($input), $this->responseWords['no'])) {
+            } elseif (in_array(strtolower($input), $this->_responseWords['no'], true)) {
                 $deny = new Command();
                 $deny->args[] = $input;
 
@@ -89,6 +93,8 @@ class CommandProcessor
                 
                 $output = "Command cancelled.";
                 $this->addToLog($output, 'output');
+                unset($this->_storage->confirmCmd);
+                $this->_storage->write();
                 return $output;
             }
             unset($this->_storage->confirmCmd);
@@ -138,8 +144,9 @@ class CommandProcessor
             ];
 
             $inputWithPronouns = $this->_parser->processPronouns($input, $context);
+            $inputForParse = $inputWithPronouns ?: $input;
 
-            $command = $this->_parser->parse($input);
+            $command = $this->_parser->parse($inputForParse);
         }
 
         if (empty($command->resources) && $command->verb == 'help') {
@@ -149,7 +156,7 @@ class CommandProcessor
         }
 
         if (!$command->verb && empty($command->resources)) {
-            $command = $this->_parser->processQuestion($input);
+            $command = $this->_parser->processQuestion($inputForParse ?? $input);
         }
 
         if (!$command || (empty($command->verb) && empty($command->resources))) {
@@ -173,6 +180,33 @@ class CommandProcessor
             $this->_storage->currentCmd = $command;
             $this->_storage->write();
             $output = $this->suggestResources($command);
+            $this->addToLog($output, 'output');
+            return $output;
+        }
+
+        if (!$this->resourceExists($command->resources[0])) {
+            if ($this->isSameCommand($command, 4)) {
+                unset($this->_storage->currentCmd);
+                $this->_storage->confirmCmd = $command;
+                $this->_storage->write();
+                $output = "You've submitted this command over 3 times in a row. Are you sure you want to run it again? [yes/no]";
+                $this->addToLog($output, 'output');
+                return $output;
+            }
+
+            $this->_storage->lastResource = $command->resources[0];
+            $this->_storage->lastVerb = $command->verb;
+            $this->_storage->write();
+
+            if ($this->shouldUseNavigator($input)) {
+                $response = $this->respondWithNavigator($input) ?? $this->respond($input);
+                if ($response) {
+                    $this->addToLog($response, 'output');
+                    return $response;
+                }
+            }
+
+            $output = 'Resource not found';
             $this->addToLog($output, 'output');
             return $output;
         }
@@ -306,8 +340,11 @@ class CommandProcessor
         }
 
         $error = $this->parseAsStatement($input, $cmd);
+        if (is_string($error) && str_contains($error, 'Unknown nonterminal')) {
+            $error = null;
+        }
 
-        $response = $this->respond($input);
+        $response = $this->respondWithNavigator($input) ?? $this->respond($input);
         
         if (!$response) {
             $this->_storage->errors++;
@@ -407,8 +444,10 @@ class CommandProcessor
         // Add the current command to the log
         $log[] = ['direction'=>$direction, 'text'=>$text];
         
-        if (count($log) > 50) {
-            array_shift($log);
+        if (Arr::count($log) > 50) {
+            $log = Arr::make($log);
+            $log->shift();
+            $log = $log->val();
         }
         $this->_storage->log = $log;
         $this->_storage->write();
@@ -420,8 +459,10 @@ class CommandProcessor
 
         // Add the current command to the history
         $history[] = $command;
-        if (count($history) > 50) {
-            array_shift($history);
+        if (Arr::count($history) > 50) {
+            $history = Arr::make($history);
+            $history->shift();
+            $history = $history->val();
         }
         $this->_storage->history = $history;
         $this->_storage->write();
@@ -447,10 +488,24 @@ class CommandProcessor
 
         if ($highestSimilarity > 50) {
             $responseIndex = array_rand($bestMatch['responses']);
-            return $bestMatch['responses'][$responseIndex];
+            $response = $bestMatch['responses'][$responseIndex];
+            if (is_callable($response)) {
+                return $response();
+            }
+            return $response;
         }
 
         return null;
+    }
+
+    private function respondWithNavigator(string $input): ?string
+    {
+        if (!$this->_navigator) {
+            return null;
+        }
+
+        $response = $this->_navigator->process($input);
+        return $response !== '' ? $response : null;
     }
 
     private function suggestResources($command)
@@ -464,6 +519,26 @@ class CommandProcessor
             default:
                 return "No registered resource specified in the command. Which resource do you want to {$command->verb} using?";
         }
+    }
+
+    private function resourceExists(string $resource): bool
+    {
+        $abilities = $this->_app->getAbilities();
+        return isset($abilities[$resource]);
+    }
+
+    private function shouldUseNavigator(string $input): bool
+    {
+        $trimmed = trim($input);
+        if ($trimmed === '') {
+            return false;
+        }
+
+        if (str_ends_with($trimmed, '?')) {
+            return true;
+        }
+
+        return (bool)preg_match('/^(who|what|where|when|why|how)\\b/i', $trimmed);
     }
 
     private function conversationalResponse( $input )
@@ -525,7 +600,7 @@ class CommandProcessor
         ],
         'wellbeing' => [
             'keywords' => ['how are you', 'how is it going', 'what\'s up', 'how do you feel'],
-            'responses' => [(function () {
+            'responses' => [function () {
             $os = PHP_OS_FAMILY;
 
             // Get the number of CPU cores
@@ -556,7 +631,7 @@ class CommandProcessor
             } else {
                 return 'I\'m not sure how I\'m feeling right now. I cannot retrieve system load information.';
             }
-        })(),
+        },
         'I\'m doing well, thank you!', 'I\'m just a program, but I\'m functioning as expected.'],
         ],
         'farewell' => [

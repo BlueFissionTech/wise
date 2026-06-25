@@ -5,6 +5,7 @@ namespace BlueFission\Wise\Usr;
 use BlueFission\Wise\Arc\Kernel;
 use BlueFission\Services\Authenticator;
 use BlueFission\Str;
+use BlueFission\Wise\Usr\Profile;
 
 class Identity {
 	protected $_authenticator;
@@ -66,6 +67,31 @@ class Identity {
 
 	public function isAuthenticated() {
 		return $this->_authenticator->isAuthenticated();
+	}
+
+	public function profile(): Profile
+	{
+		$id = '';
+		if (isset($this->_authenticator->id) && $this->_authenticator->id !== '') {
+			$id = (string)$this->_authenticator->id;
+		} elseif (isset($this->_authenticator->username) && $this->_authenticator->username !== '') {
+			$id = (string)$this->_authenticator->username;
+		}
+
+		if ($id === '') {
+			$id = 'guest';
+		}
+
+		$roles = [];
+		if (isset($this->_authenticator->roles) && is_array($this->_authenticator->roles)) {
+			$roles = $this->_authenticator->roles;
+		}
+
+		if (empty($roles)) {
+			$roles = [$this->isAuthenticated() ? 'user' : 'guest'];
+		}
+
+		return new Profile($id, $roles);
 	}
 
 	private function display($data) {

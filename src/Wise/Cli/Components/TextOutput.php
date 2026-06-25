@@ -15,6 +15,7 @@ class TextOutput extends Component
     protected int $_bufferSize;
     protected Arr $_lines;
     protected int $_scrollTop; // The topmost visible line of the content
+    protected int $_sequence = 0;
 
     public function __construct(int $x = 0, int $y = 0, int $width = 80, int $height = 24, int $bufferSize = 1024, int $zIndex = 0)
     {
@@ -27,7 +28,8 @@ class TextOutput extends Component
 
     public function addLine(string $line): void
     {
-        $this->addChild(new Text(0, 0, $this->getWidth(), 1, $line, 0, true, false));
+        $this->_sequence++;
+        $this->addChild(new Text(0, 0, $this->getWidth(), 1, $line, $this->_sequence, true, false));
 
         if ( $this->_console?->getDisplayMode() == Console::DYNAMIC_MODE ) {
             $this->_scrollTop = $this->calculateScrollTop();
@@ -43,6 +45,12 @@ class TextOutput extends Component
             $output = $child->draw();
             $this->_console->send(implode(PHP_EOL, $output));
         }
+    }
+
+    public function removeChild(IDrawable $child): void
+    {
+        parent::removeChild($child);
+        $this->_needsRedraw = true;
     }
 
     protected function calculateScrollTop(): int
@@ -86,16 +94,9 @@ class TextOutput extends Component
     public function draw(): array
     {
         $contents = parent::draw();
+        $this->_lines = Arr::make($contents);
 
         return $contents;
-
-        $this->_lines = Arr::make(explode(PHP_EOL, $contents));
-
-        // Show only the visible portion of contents given the current scrollTop
-        $visibleContent = $this->_lines->slice($this->_scrollTop, $this->needsRedraw() ? $this->getHeight() : null );
-        $this->_content->val(implode(PHP_EOL, $visibleContent));
-
-        return $visibleContent;
     }
 
     public function getCharacterAtPosition(int $x, int $y): string

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="vendor/autoload.php"
+         colors="true"
+         failOnWarning="false"
+         failOnRisky="true"
+         cacheResult="false">
+    <testsuites>
+        <testsuite name="Wise Tests">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+    <groups>
+        <exclude>
+            <group>integration</group>
+        </exclude>
+    </groups>
+</phpunit>

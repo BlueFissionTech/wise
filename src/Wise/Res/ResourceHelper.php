@@ -4,15 +4,26 @@ namespace BlueFission\Wise\Res;
 
 use BlueFission\Services\Service;
 use BlueFission\Behavioral\Behaviors\Behavior;
+use BlueFission\Behavioral\Behaviors\Event;
+use BlueFission\Behavioral\Behaviors\Meta;
+use BlueFission\DevElation as Dev;
 
 class ResourceHelper extends Service
 {
     protected $_page;
     protected $_perPage;
-
-    protected $knownResources = [
-        'system', 'model', 'controller', 'user', 'filemanager', 'database', 'code', 'skill', 'command', 'info', 'weather', 'website', 'web', 'howto', 'news', 'variable', 'file', 'todo', 'queue', 'stack', 'schedule', 'ai', 'transcript', 'task', 'step', 'calc', 'action', 'api', 'feature', 'note', 'entity'
-    ];
+    protected string $_resourceName = 'resource';
+    protected const OUTPUT_EVENT = 'wise.resource.output';
+    protected const OUTPUT_REFRESH_EVENT = 'wise.resource.output.refresh';
+    protected const WAITING_EVENT = 'wise.resource.waiting';
+    protected array $_expectedOptions = [];
+    protected array $_expectedOptionsMeta = [];
+    protected array $_outputMeta = [];
+    protected ?string $_lastOutputHash = null;
+    protected ?string $_lastOptionsHash = null;
+    protected int $_outputPreviewLines = 3;
+    protected int $_outputPreviewChars = 240;
+    protected int $_outputFullMax = 2000;
 
     public function __construct()
     {
@@ -22,15 +33,24 @@ class ResourceHelper extends Service
         $this->_page = $this->_page > 0 ? $this->_page : 1;
         $this->_perPage = $this->_perPage > 0 ? $this->_perPage : 25;
 
+        $this->knownResources = array_keys(self::$resources);
+        $this->resourceDescriptions = self::$resources;
+
         parent::__construct();
     }
 
     public function handle($behavior, $args)
     {
+        $this->resetOutputTracking();
         $action = $behavior->name();
 
         if (count($args) > 1 && $args[0] === 'help') {
             $this->_response = $this->help();
+            $this->setOutputType('help', [
+                'commands' => ['list', 'previous', 'next', 'show', 'help'],
+            ]);
+            $this->emitOutputEventIfNeeded();
+            $this->emitWaitingEventIfNeeded();
             return;
         }
 
@@ -45,6 +65,10 @@ class ResourceHelper extends Service
                     $this->showResource($args[0]);
                 } else {
                     $this->_response = "Please provide a resource name to show.";
+                    $this->setOutputType('error', [
+                        'error' => 'missing_name',
+                        'action' => 'show',
+                    ]);
                 }
                 break;
             case 'next':
@@ -61,14 +85,27 @@ class ResourceHelper extends Service
                 break;
             case 'help':
                 $this->_response = $this->help();
+                $this->setOutputType('help', [
+                    'commands' => ['list', 'previous', 'next', 'show', 'help'],
+                ]);
                 break;
             default:
                 if ($command == 'help') {
                     $this->_response = $this->help();
+                    $this->setOutputType('help', [
+                        'commands' => ['list', 'previous', 'next', 'show', 'help'],
+                    ]);
                 } else {
                     $this->_response = "Invalid action specified. Type 'help with resources' for available options.";
+                    $this->setOutputType('error', [
+                        'error' => 'invalid_action',
+                        'action' => $action,
+                    ]);
                 }
         }
+
+        $this->emitOutputEventIfNeeded();
+        $this->emitWaitingEventIfNeeded();
     }
 
     public function showAll($behavior, $args)
@@ -82,6 +119,11 @@ class ResourceHelper extends Service
         }
 
         $this->_response = $response;
+        $this->setOutputType('list', [
+            'list_type' => 'resources',
+            'items' => array_keys($this->resourceDescriptions),
+            'count' => count($this->resourceDescriptions),
+        ]);
     }
 
     private function listResources($behavior, $args)
@@ -115,12 +157,14 @@ class ResourceHelper extends Service
             $i = 0;
             $count = 0;
             $response = "";
+            $pageItems = [];
 
             $response = "List of available resources:\n";
             foreach ($resources as $resource) {
                 if ($i >= $pageStart && $i < $pageEnd) {
                     $response .= "  - " . $resource . PHP_EOL;
                     $count++;
+                    $pageItems[] = $resource;
                 }
                 $i++;
             }
@@ -128,8 +172,31 @@ class ResourceHelper extends Service
             $response .= "Showing {$count} of {$total} resources. Page {$page} of {$totalPages}." . PHP_EOL;
             $response .= "Type 'show resource \"<resource>\"' for more information about a specific resource." . PHP_EOL;
             $response .= "Type `previous resources` or `next resources` to move through pages." . PHP_EOL;
+
+            $this->setOutputType('list', [
+                'list_type' => 'resources',
+                'page' => $page,
+                'per_page' => $this->_perPage,
+                'total' => $total,
+                'count' => $count,
+                'items' => $pageItems,
+            ]);
+            $this->setExpectedOptions([
+                'previous resources',
+                'next resources',
+                'help with resources',
+                'show resource <resource>',
+            ], ['source' => 'list']);
         } else {
             $response = "No resources have been set.";
+            $this->setOutputType('list', [
+                'list_type' => 'resources',
+                'page' => $page,
+                'per_page' => $this->_perPage,
+                'total' => 0,
+                'count' => 0,
+                'items' => [],
+            ]);
         }
 
         $this->_response = $response;
@@ -141,8 +208,17 @@ class ResourceHelper extends Service
             $this->_response = "Resource: " . $resourceName . "\n";
             $this->_response .= "Description: " . $this->resourceDescriptions[$resourceName]['desc'] . "\n";
             $this->_response .= "Hint: " . $this->resourceDescriptions[$resourceName]['hint'];
+            $this->setOutputType('detail', [
+                'name' => $resourceName,
+                'entry' => $this->resourceDescriptions[$resourceName],
+            ]);
         } else {
             $this->_response = "Resource '{$resourceName}' not found.";
+            $this->setOutputType('error', [
+                'error' => 'not_found',
+                'action' => 'show',
+                'name' => $resourceName,
+            ]);
         }
     }
 
@@ -181,6 +257,179 @@ class ResourceHelper extends Service
             "- help resource: Show this help message.";
     }
 
+    protected function setOutputType(string $type, array $meta = []): void
+    {
+        $payload = array_merge([
+            'output_type' => $type,
+            'item' => $this->_resourceName,
+        ], $meta);
+
+        $this->mergeOutputMeta($payload);
+    }
+
+    protected function setOutputMeta(array $meta): void
+    {
+        $this->_outputMeta = $meta;
+    }
+
+    protected function mergeOutputMeta(array $meta): void
+    {
+        $this->_outputMeta = array_merge($this->_outputMeta, $meta);
+    }
+
+    protected function setExpectedOptions(array|string $options, array $meta = []): void
+    {
+        $options = is_array($options) ? $options : [$options];
+        $normalized = [];
+        foreach ($options as $option) {
+            $option = trim((string)$option);
+            if ($option === '') {
+                continue;
+            }
+            $normalized[$option] = true;
+        }
+
+        $this->_expectedOptions = array_keys($normalized);
+        $this->_expectedOptionsMeta = $meta;
+    }
+
+    protected function clearExpectedOptions(): void
+    {
+        $this->_expectedOptions = [];
+        $this->_expectedOptionsMeta = [];
+    }
+
+    protected function resetOutputTracking(): void
+    {
+        $this->_outputMeta = [];
+        $this->clearExpectedOptions();
+    }
+
+    protected function emitOutputEventIfNeeded(?string $output = null): void
+    {
+        $output = $output ?? $this->_response ?? '';
+        if (!is_string($output) || $output === '') {
+            return;
+        }
+
+        $hash = sha1($output);
+        if ($hash === $this->_lastOutputHash) {
+            $this->emitOutputRefreshEvent($output);
+            return;
+        }
+        $this->_lastOutputHash = $hash;
+
+        $preview = $this->buildOutputPreview($output);
+        $markdown = Dev::apply('wise.resource.output.markdown', $preview['text']);
+
+        $payload = array_merge([
+            'resource' => $this->_resourceName,
+            'output' => $preview['text'],
+            'lines' => $preview['lines'],
+            'truncated' => $preview['truncated'],
+            'length' => strlen($output),
+            'markdown' => $markdown,
+            'hash' => $hash,
+        ], $this->buildFullOutputMeta($output), $this->_outputMeta);
+
+        $payload = Dev::apply('wise.resource.output.meta', $payload);
+
+        $this->dispatch(self::OUTPUT_EVENT, new Meta(data: $payload, src: $this));
+        $this->dispatch(Event::CHANGE, new Meta(data: $payload, src: $this));
+        Dev::do('wise.resource.output.changed', $payload);
+    }
+
+    protected function emitOutputRefreshEvent(string $output): void
+    {
+        $preview = $this->buildOutputPreview($output);
+        $payload = array_merge([
+            'resource' => $this->_resourceName,
+            'output' => $preview['text'],
+            'lines' => $preview['lines'],
+            'truncated' => $preview['truncated'],
+            'length' => strlen($output),
+        ], $this->buildFullOutputMeta($output), $this->_outputMeta);
+
+        $payload = Dev::apply('wise.resource.output.refresh.meta', $payload);
+
+        $this->dispatch(self::OUTPUT_REFRESH_EVENT, new Meta(data: $payload, src: $this));
+        Dev::do('wise.resource.output.refresh', $payload);
+    }
+
+    protected function emitWaitingEventIfNeeded(?string $output = null): void
+    {
+        $output = $output ?? $this->_response ?? '';
+        if (!is_string($output) || $output === '') {
+            return;
+        }
+
+        $options = $this->_expectedOptions;
+        if ($options === []) {
+            return;
+        }
+
+        $hash = sha1(implode('|', $options) . '|' . $output);
+        if ($hash === $this->_lastOptionsHash) {
+            return;
+        }
+        $this->_lastOptionsHash = $hash;
+
+        $payload = array_merge([
+            'resource' => $this->_resourceName,
+            'state' => 'waiting',
+            'options' => $options,
+        ], $this->_expectedOptionsMeta);
+
+        $payload = Dev::apply('wise.resource.waiting.meta', $payload);
+
+        $this->dispatch(self::WAITING_EVENT, new Meta(data: $payload, src: $this));
+        $this->dispatch(Event::STATE_CHANGED, new Meta(data: $payload, src: $this));
+        Dev::do('wise.resource.waiting', $payload);
+    }
+
+    protected function buildOutputPreview(string $output): array
+    {
+        $normalized = str_replace(["\r\n", "\r"], "\n", $output);
+        $lines = preg_split('/\n/', $normalized);
+        if (!is_array($lines) || $lines === []) {
+            $lines = [$output];
+        }
+
+        $previewLines = array_slice($lines, 0, $this->_outputPreviewLines);
+        $previewText = implode(PHP_EOL, $previewLines);
+        $truncated = count($lines) > $this->_outputPreviewLines;
+
+        if (strlen($previewText) > $this->_outputPreviewChars) {
+            $previewText = substr($previewText, 0, $this->_outputPreviewChars);
+            $truncated = true;
+        }
+
+        $previewText = Dev::apply('wise.resource.output.preview', $previewText);
+
+        return [
+            'text' => $previewText,
+            'lines' => $previewLines,
+            'truncated' => $truncated,
+        ];
+    }
+
+    protected function buildFullOutputMeta(string $output): array
+    {
+        if (strlen($output) <= $this->_outputFullMax) {
+            return ['full_output' => $output];
+        }
+
+        return [];
+    }
+
+    public static function addResource($resourceName, $description = '', $hint = '')
+    {
+        self::$resources[$resourceName] = [
+            'desc' => $description,
+            'hint' => $hint
+        ];
+    }
+
     public function __destruct()
     {
         store('_system.resource.page', $this->_page);
@@ -188,7 +437,7 @@ class ResourceHelper extends Service
     }
 
     // Descriptions and hints for each resource
-    private $resourceDescriptions = [
+    private static $resources = [
         'system' => [
             'desc' => 'The system resource manages core system functionalities and configurations.',
             'hint' => 'Use the system resource in combination with other resources to create complex tasks or automate processes.'

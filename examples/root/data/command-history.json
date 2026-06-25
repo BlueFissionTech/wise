@@ -1,0 +1,10 @@
+{
+  "commands": [
+    "list all resources",
+    "list command resources",
+    "show memory status",
+    "show resource events",
+    "run agent readiness"
+  ],
+  "suggestion": "list command resources"
+}
