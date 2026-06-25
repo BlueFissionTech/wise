@@ -32,6 +32,7 @@ use BlueFission\Cli\Util\Tty;
 use BlueFission\Cli\Util\ProgressBar;
 use BlueFission\Cli\Util\StatusBar;
 use BlueFission\Async\{Heap, Thread, Fork};
+use BlueFission\Data\FileSystem;
 use BlueFission\Data\Storage\{Disk, Memory, SQLite};
 use BlueFission\Automata\Language\{
 	Interpreter,
@@ -47,14 +48,15 @@ use BlueFission\IPC\IPC;
 use BlueFission\Data\Queues\MemQueue;
 
 $rootPath = dirname(__DIR__);
-$virtualRoot = getenv('WISE_FS_ROOT') ?: ($rootPath . '/examples/root');
-$sessionLocation = $rootPath . DIRECTORY_SEPARATOR . 'artifacts';
-if (!is_dir($sessionLocation)) {
-    mkdir($sessionLocation, 0777, true);
-}
-
 require $rootPath . '/vendor/autoload.php';
 require_once $rootPath . '/src/Wise/Support/store.php';
+
+$virtualRoot = getenv('WISE_FS_ROOT') ?: ($rootPath . DIRECTORY_SEPARATOR . 'examples' . DIRECTORY_SEPARATOR . 'root');
+$sessionLocation = $rootPath . DIRECTORY_SEPARATOR . 'artifacts';
+$sessionDirectory = new FileSystem(['root' => $rootPath, 'filter' => []]);
+if (!$sessionDirectory->exists($sessionLocation)) {
+    $sessionDirectory->mkdir('artifacts');
+}
 
 // ini_set('display_errors', 1);
 // ini_set('display_startup_errors', 1);
@@ -363,7 +365,6 @@ $workingMemory = new WorkingMemoryCoordinator(
 );
 $memoryAdapter = new SynthetiqMemoryAdapter($workingMemory, new Profile('system', ['system']));
 
-// Create and initialize the kernel
 $navigator = null;
 if (!$batchMode) {
     $console->output('Loading W.I.S.E...', 'system');
@@ -385,12 +386,12 @@ $kernel = new Kernel(
         null,
         $navigator
     ),
-    new MemoryManager(300, 60),  // MemoryManager with 300 seconds threshold and 60 seconds monitoring interval
-    new FileSystemManager(['root'=>$virtualRoot]),
-    new Interpreter( new Grammar( new StemmerLemmatizer(), $grammarRules ), new Documenter(), new Walker() ),
-    $console, // Our console object we previously setup
-    new Disk(['location'=>$sessionLocation, 'name'=>'storage.json']),
-    new SQLite(['database'=>$rootPath . '/database.db']),
+    new MemoryManager(300, 60),
+    new FileSystemManager(['root' => $virtualRoot]),
+    new Interpreter(new Grammar(new StemmerLemmatizer(), $grammarRules), new Documenter(), new Walker()),
+    $console,
+    new Disk(['location' => $sessionLocation, 'name' => 'storage.json']),
+    new SQLite(['database' => $rootPath . DIRECTORY_SEPARATOR . 'database.db']),
     new IPC(new Memory())
 );
 
