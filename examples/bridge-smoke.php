@@ -7,6 +7,7 @@ use BlueFission\Wise\Exe\BridgeContext;
 use BlueFission\Wise\Exe\BridgeRegistry;
 use BlueFission\Wise\Exe\JenssBridge;
 use BlueFission\Wise\Exe\VibeBridge;
+use BlueFission\Arr;
 use BlueFission\Str;
 use BlueFission\Automata\LLM\Clients\IClient;
 use BlueFission\Automata\LLM\Reply;
@@ -123,22 +124,21 @@ function exampleFiles(string $root): array
             continue;
         }
 
-        $extension = strtolower($file->getExtension());
-        if (!in_array($extension, ['jss', 'vibe'], true)) {
+        $extension = Str::lower($file->getExtension());
+        if (!Arr::has(['jss', 'vibe'], $extension, true)) {
             continue;
         }
 
         $files[] = $file->getPathname();
     }
 
-    sort($files);
-    return $files;
+    return Arr::make($files)->sort()->val();
 }
 
 function relativePath(string $root, string $path): string
 {
-    $relative = substr($path, strlen($root) + 1);
-    return str_replace(DIRECTORY_SEPARATOR, '/', $relative);
+    $relative = Str::sub($path, Str::len($root) + 1);
+    return Str::replace($relative, DIRECTORY_SEPARATOR, '/');
 }
 
 function jenssAvailable(): bool
@@ -180,7 +180,7 @@ function shouldSkipVibeMixRegistry(): bool
         return false;
     }
 
-    return str_contains($tagContents, '(?P<{$tag}>') && str_contains($mixContents, 'mix:');
+    return Str::has($tagContents, '(?P<{$tag}>') && Str::has($mixContents, 'mix:');
 }
 
 /**
