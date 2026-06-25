@@ -6,6 +6,7 @@ namespace BlueFission\Wise;
 use BlueFission\Arr;
 use BlueFission\Num;
 use BlueFission\Str;
+use BlueFission\Val;
 use BlueFission\Wise\Arc\Kernel;
 use BlueFission\Wise\Arc\ProcessManager;
 use BlueFission\Wise\Sys\{
@@ -186,7 +187,7 @@ $inputStream = $inputFile ? CommandInputStream::fromFile($inputFile) : null;
 $batchMode = $inputStream !== null;
 
 $displayMode = getenv('WISE_DISPLAY_MODE');
-$displayMode = $displayMode ? Str::lower(Str::trim($displayMode)) : ($batchMode ? 'static' : 'dynamic');
+$displayMode = $displayMode ? Str::make($displayMode)->trim()->lower()->val() : ($batchMode ? 'static' : 'dynamic');
 if (!$batchMode && $displayMode === 'dynamic' && !Tty::isTty(STDOUT)) {
     $displayMode = 'static';
 }
@@ -245,7 +246,7 @@ if ($outputTargets !== false && Str::trim($outputTargets) !== '') {
             continue;
         }
         if (Str::startsWith($target, 'file:')) {
-            $path = Str::trim(Str::sub($target, Str::len('file:')));
+            $path = Str::make($target)->sub(Str::len('file:'))->trim()->val();
             $path = $path !== '' ? $path : ($outputFile ?: 'wise_output.txt');
             $drivers[] = new StreamDisplayDriver($path, $outputAppend);
         }
@@ -337,14 +338,14 @@ if (!$batchMode) {
 
         $index = $seenStages[$stage];
         $subPercent = 100;
-        if (isset($meta['sub_current'], $meta['sub_total']) && $meta['sub_total'] > 0) {
+        if (Val::is($meta['sub_current'] ?? null) && Val::is($meta['sub_total'] ?? null) && $meta['sub_total'] > 0) {
             $subPercent = (int)floor(($meta['sub_current'] / $meta['sub_total']) * 100);
         }
         $overallCurrent = (($index - 1) * 100) + max(1, $subPercent);
         $progressBar->setCurrent(min($overallCurrent, $progressTotal));
         $statusBar->set('step', $index . '/' . Arr::count($bootStages));
         $statusBar->set('stage', $bootStages[$stage]);
-        if (isset($meta['sub_current'], $meta['sub_total']) && $meta['sub_total'] > 0) {
+        if (Val::is($meta['sub_current'] ?? null) && Val::is($meta['sub_total'] ?? null) && $meta['sub_total'] > 0) {
             $statusBar->set('progress', $meta['sub_current'] . '/' . $meta['sub_total']);
         } else {
             $statusBar->remove('progress');
