@@ -8,6 +8,7 @@ use BlueFission\DevElation as Dev;
 use BlueFission\Num;
 use BlueFission\Services\Service;
 use BlueFission\Str;
+use BlueFission\Val;
 
 abstract class BaseResource extends Service {
     protected $_entries = [];
@@ -150,9 +151,9 @@ abstract class BaseResource extends Service {
         if (Arr::count($args) > 0) {
             $name = $args[0];
             $entry = $this->retrieve($name);
-            if ($entry === null) {
+            if (Val::isNull($entry)) {
                 $entry = $this->makeItem($name, $args);
-                if ($entry == null) {
+                if (Val::isNull($entry)) {
                     return;
                 }
                 $this->keep($entry);
@@ -206,7 +207,7 @@ abstract class BaseResource extends Service {
         $gpt3_response = $openAIService->complete($gpt3_prompt, ['max_tokens'=>3000]);
 
         // Check for errors in the response
-        if (isset($gpt3_response['error'])) {
+        if (Arr::hasKey($gpt3_response, 'error')) {
             $this->_response = "Error generating {$item}.";
             $this->setOutputType('error', [
                 'error' => 'generation_failed',
@@ -229,19 +230,19 @@ abstract class BaseResource extends Service {
     {
         $item = $this->_itemName ?? $this->_name;
 
-        if (isset($args) && isset($args[0]) && isset($args[1])) {
+        if (Val::is($args) && Val::is($args[0] ?? null) && Val::is($args[1] ?? null)) {
             $key = $args[0] ?? null;
             $value = $args[1] ?? null;
             if ($this->_selected) {
                 $entry = $this->_selected;
-            } elseif (isset($args[2])) {
+            } elseif (Val::is($args[2] ?? null)) {
                 $name = $args[2];
                 $entry = $this->retrieve($name);
             } else {
                 $this->_response = "Please provide a property to get the value of the {$item}.";
             }
-            
-            if (isset($entry)) {
+
+            if (Val::is($entry ?? null)) {
                 $entry[$key] = $value;
                 $this->keep($entry);
                 $this->_response = ucfirst($item)." '{$key}' has been set to '{$value}'.";
@@ -270,17 +271,17 @@ abstract class BaseResource extends Service {
     protected function get($args)
     {
         $item = $this->_itemName ?? $this->_name;
-        if (isset($args) && isset($args[0])) {
+        if (Val::is($args) && Val::is($args[0] ?? null)) {
             $key = $args[0] ?? '';
             if ($this->_selected) {
                 $entry = $this->_selected;
-            } elseif (isset($args[1])) {
+            } elseif (Val::is($args[1] ?? null)) {
                 $name = $args[1];
                 $entry = $this->retrieve($name);
             }
 
             $property = Str::trim((string)$key);
-            if (isset($entry) && isset($entry[$property]) && $entry[$property] !== '') {
+            if (Val::is($entry ?? null) && Val::is($entry[$property] ?? null) && $entry[$property] !== '') {
                 $value = $entry[$property];
                 $this->_response = "The value of '{$key}' is '{$value}'.";
                 $this->setOutputType('property', [
@@ -316,7 +317,7 @@ abstract class BaseResource extends Service {
             $key = $args[0];
             $list = $this->retrieve($key);
 
-            if (isset($list)) {
+            if (Val::is($list ?? null)) {
                 $response = $this->subList($args);
             } else {
                 $response = "'".ucfirst($item)." '{$key}' not found. Use `list all ".$this->pluralize($this->_name)."` to see available lists.\n";
@@ -346,7 +347,7 @@ abstract class BaseResource extends Service {
         $this->_page = $page;
         $entries = Arr::keys($this->_entries);
 
-        if ($entries !== null) {
+        if (Val::is($entries)) {
             if ($this->_perPage < 1) {
                 $this->_perPage = 25;
             }
@@ -417,13 +418,13 @@ abstract class BaseResource extends Service {
         }
 
         $listName = ($args[0] ?? null);
-        $list = isset($args[0]) ? $this->retrieve($args[0]) : $this->_selected;
+        $list = Val::is($args[0] ?? null) ? $this->retrieve($args[0]) : $this->_selected;
         
         $page = $this->_subPage;
         $perPage = $this->_perSubPage ;
 
 
-        if (isset($list) && Arr::is($list)) {
+        if (Val::is($list ?? null) && Arr::is($list)) {
             if ($perPage < 1) {
                 $perPage = 25;
             }
@@ -479,7 +480,7 @@ abstract class BaseResource extends Service {
     {
         $perPage = Arr::count($args) >= 1 ? (int)$args[0] : $this->_perPage;
 
-        if ($perPage !== null) {
+        if (Val::is($perPage)) {
             $this->_perPage = $perPage;
         }
         $this->_page += 1;
@@ -491,7 +492,7 @@ abstract class BaseResource extends Service {
     {
         $perPage = Arr::count($args) >= 1 ? (int)$args[0] : $this->_perPage;
 
-        if ($perPage !== null) {
+        if (Val::is($perPage)) {
             $this->_perPage = $perPage;
         }
         $this->_page -= 1;
@@ -555,10 +556,10 @@ abstract class BaseResource extends Service {
             }
             if ( Arr::isNotEmpty($objects) ) {
                 usort($objects, function ($a, $b) {
-                    if ($a[$this->_key] === null) {
+                    if (Val::isNull($a[$this->_key] ?? null)) {
                         return 1;
                     }
-                    if ($b[$this->_key] === null) {
+                    if (Val::isNull($b[$this->_key] ?? null)) {
                         return -1;
                     }
                     return $a[$this->_key] > $b[$this->_key] ? -1 : 1;
@@ -590,7 +591,7 @@ abstract class BaseResource extends Service {
             }
             $itemMatches = [];
             foreach ($objects as $object) {
-                if (isset($object[$this->_key])) {
+                if (Val::is($object[$this->_key] ?? null)) {
                     $itemMatches[] = $object[$this->_key];
                 }
             }
@@ -697,10 +698,8 @@ abstract class BaseResource extends Service {
 
         $entry = $this->retrieve([$name]);
         foreach ($this->_editSignature as $index => $property) {
-            if (isset($args[$index])) {
-                if (isset($args[$index])) {
-                    $entry[$property] = $args[$index];
-                }
+            if (Val::is($args[$index] ?? null)) {
+                $entry[$property] = $args[$index];
             }
         }
         $this->keep($entry);
@@ -736,10 +735,10 @@ abstract class BaseResource extends Service {
         }
 
         if (Arr::count($parts) > 1) {
-            $itemName = isset($parts[0]) ? $parts[0] : null;
+            $itemName = Val::is($parts[0] ?? null) ? $parts[0] : null;
             $this->_listName = $listName = $parts[1];
             $list = $this->retrieve($listName);
-            if ($list !== null) {
+            if (Val::is($list)) {
                 $itemExists = false;
                 foreach ($list as $entry) {
                     $name = (Str::is($entry) ? $entry : $entry['name']);
@@ -1225,11 +1224,11 @@ abstract class BaseResource extends Service {
             'repeated' => false,
         ];
 
-        if (array_key_exists('status', $this->_outputMeta)) {
+        if (Arr::hasKey($this->_outputMeta, 'status')) {
             $envelope['resource_status'] = $this->_outputMeta['status'];
         }
 
-        if (!array_key_exists('semantic_metadata', $this->_outputMeta)) {
+        if (!Arr::hasKey($this->_outputMeta, 'semantic_metadata')) {
             $envelope['semantic_metadata'] = null;
         }
 
@@ -1265,7 +1264,7 @@ abstract class BaseResource extends Service {
     protected function eventStatus(array $options): string
     {
         if (($this->_outputMeta['output_type'] ?? null) === 'error'
-            || array_key_exists('error', $this->_outputMeta)) {
+            || Arr::hasKey($this->_outputMeta, 'error')) {
             return 'error';
         }
 
