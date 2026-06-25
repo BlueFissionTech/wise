@@ -3,6 +3,7 @@
 namespace BlueFission\Tests\Sys\Config;
 
 use BlueFission\Wise\Sys\Config\ConfigLocator;
+use BlueFission\Wise\Sys\DirectoryManager;
 use PHPUnit\Framework\TestCase;
 
 final class ConfigLocatorTest extends TestCase
@@ -54,7 +55,7 @@ final class ConfigLocatorTest extends TestCase
     {
         $path = $this->root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
         $dir = dirname($path);
-        if (!is_dir($dir)) {
+        if (!DirectoryManager::pathExists($dir)) {
             mkdir($dir, 0777, true);
         }
         file_put_contents($path, $content);
@@ -64,7 +65,7 @@ final class ConfigLocatorTest extends TestCase
 
     private function removeDir(string $dir): void
     {
-        if (!is_dir($dir)) {
+        if (!DirectoryManager::pathExists($dir)) {
             return;
         }
 

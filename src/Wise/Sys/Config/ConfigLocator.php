@@ -7,6 +7,7 @@ use BlueFission\Behavioral\Behaviors\Meta;
 use BlueFission\Obj;
 use BlueFission\Str;
 use BlueFission\Val;
+use BlueFission\Wise\Sys\FileSystemManager;
 
 class ConfigLocator extends Obj
 {
@@ -73,7 +74,7 @@ class ConfigLocator extends Obj
     public function resolve(string $category, string $filename = 'default.jss', ?string $profileId = null): ?string
     {
         $userPath = $this->userConfigPath($category, $filename, $profileId);
-        if ($userPath && is_file($userPath)) {
+        if ($userPath && FileSystemManager::pathExists($userPath)) {
             $this->dispatch(Event::SUCCESS, new Meta(data: [
                 'scope' => 'user',
                 'category' => $category,
@@ -83,7 +84,7 @@ class ConfigLocator extends Obj
         }
 
         $systemPath = $this->systemConfigPath($category, $filename);
-        if ($systemPath && is_file($systemPath)) {
+        if ($systemPath && FileSystemManager::pathExists($systemPath)) {
             $this->dispatch(Event::SUCCESS, new Meta(data: [
                 'scope' => 'system',
                 'category' => $category,
@@ -103,12 +104,12 @@ class ConfigLocator extends Obj
     {
         $paths = [];
         $userPath = $this->userConfigPath($category, $filename, $profileId);
-        if ($userPath && is_file($userPath)) {
+        if ($userPath && FileSystemManager::pathExists($userPath)) {
             $paths[] = $userPath;
         }
 
         $systemPath = $this->systemConfigPath($category, $filename);
-        if ($systemPath && is_file($systemPath)) {
+        if ($systemPath && FileSystemManager::pathExists($systemPath)) {
             $paths[] = $systemPath;
         }
 

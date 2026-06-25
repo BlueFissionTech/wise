@@ -2,9 +2,12 @@
 
 namespace BlueFission\Wise\Exe;
 
+use BlueFission\Arr;
 use BlueFission\Behavioral\Behaviors\Event;
 use BlueFission\Behavioral\Behaviors\Meta;
 use BlueFission\Obj;
+use BlueFission\Str;
+use BlueFission\Wise\Sys\FileSystemManager;
 
 class VibeBridge extends Obj implements IBridge
 {
@@ -20,8 +23,8 @@ class VibeBridge extends Obj implements IBridge
 
     public function canHandleFile(string $path): bool
     {
-        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-        return in_array($ext, $this->extensions(), true);
+        $ext = Str::lower(pathinfo($path, PATHINFO_EXTENSION));
+        return Arr::has($this->extensions(), $ext, true);
     }
 
     public function runFile(string $path, BridgeContext $context): BridgeResult
@@ -111,7 +114,7 @@ class VibeBridge extends Obj implements IBridge
             . DIRECTORY_SEPARATOR . 'vibrato';
 
         $autoload = $base . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php';
-        if (is_file($autoload)) {
+        if (FileSystemManager::pathExists($autoload)) {
             require_once $autoload;
         }
 
@@ -119,7 +122,7 @@ class VibeBridge extends Obj implements IBridge
             . DIRECTORY_SEPARATOR . 'src'
             . DIRECTORY_SEPARATOR . 'Vibrato'
             . DIRECTORY_SEPARATOR . 'Reader.php';
-        if (is_file($readerFile)) {
+        if (FileSystemManager::pathExists($readerFile)) {
             require_once $readerFile;
         }
 

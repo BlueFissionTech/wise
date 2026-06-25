@@ -2,6 +2,7 @@
 namespace BlueFission\Wise\Cmd;
 
 
+use BlueFission\Arr;
 use BlueFission\Automata\Language\Grammar;
 use BlueFission\Automata\Language\SyntaxTreeWalker;
 use BlueFission\Automata\Language\EntityExtractor;
@@ -443,8 +444,10 @@ class CommandProcessor
         // Add the current command to the log
         $log[] = ['direction'=>$direction, 'text'=>$text];
         
-        if (count($log) > 50) {
-            array_shift($log);
+        if (Arr::count($log) > 50) {
+            $log = Arr::make($log);
+            $log->shift();
+            $log = $log->val();
         }
         $this->_storage->log = $log;
         $this->_storage->write();
@@ -456,8 +459,10 @@ class CommandProcessor
 
         // Add the current command to the history
         $history[] = $command;
-        if (count($history) > 50) {
-            array_shift($history);
+        if (Arr::count($history) > 50) {
+            $history = Arr::make($history);
+            $history->shift();
+            $history = $history->val();
         }
         $this->_storage->history = $history;
         $this->_storage->write();
