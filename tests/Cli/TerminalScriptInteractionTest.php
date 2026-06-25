@@ -2,6 +2,7 @@
 
 namespace BlueFission\Tests\Cli;
 
+use BlueFission\Wise\Sys\DirectoryManager;
 use PHPUnit\Framework\TestCase;
 
 final class TerminalScriptInteractionTest extends TestCase
@@ -57,6 +58,9 @@ final class TerminalScriptInteractionTest extends TestCase
         $env['WISE_DISPLAY_MODE'] = 'static';
         $env['WISE_INPUT_EXIT'] = '1';
         $env['WISE_TTY_ECHO'] = '0';
+        $env['STORAGE_PATH'] = $this->tempDir;
+        $env['STORAGE_FILE_NAME'] = 'wise_cli_test_storage.json';
+        $env['CLI_SESSION_ID'] = 'wise-cli-test';
 
         $process = proc_open($command, $descriptors, $pipes, $this->projectRoot(), $env);
         if (!is_resource($process)) {
@@ -115,7 +119,7 @@ final class TerminalScriptInteractionTest extends TestCase
 
     private function removeDir(string $dir): void
     {
-        if (!is_dir($dir)) {
+        if (!DirectoryManager::pathExists($dir)) {
             return;
         }
 

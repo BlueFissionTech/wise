@@ -2,9 +2,13 @@
 
 namespace BlueFission\Wise\Exe;
 
+use BlueFission\Arr;
 use BlueFission\Behavioral\Behaviors\Event;
 use BlueFission\Behavioral\Behaviors\Meta;
 use BlueFission\Obj;
+use BlueFission\Str;
+use BlueFission\Wise\Sys\DirectoryManager;
+use BlueFission\Wise\Sys\FileSystemManager;
 
 class JenssBridge extends Obj implements IBridge
 {
@@ -27,8 +31,8 @@ class JenssBridge extends Obj implements IBridge
 
     public function canHandleFile(string $path): bool
     {
-        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-        return in_array($ext, $this->extensions(), true);
+        $ext = Str::lower(pathinfo($path, PATHINFO_EXTENSION));
+        return Arr::has($this->extensions(), $ext, true);
     }
 
     public function runFile(string $path, BridgeContext $context): BridgeResult
@@ -108,12 +112,12 @@ class JenssBridge extends Obj implements IBridge
     {
         $paths = $context->basePaths();
         $resourcePath = __DIR__ . DIRECTORY_SEPARATOR . 'resources';
-        if (!in_array($resourcePath, $paths, true)) {
+        if (!Arr::has($paths, $resourcePath, true)) {
             $paths[] = $resourcePath;
         }
 
         $vendorModules = dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'bluefission' . DIRECTORY_SEPARATOR . 'jenerator' . DIRECTORY_SEPARATOR . 'modules';
-        if (is_dir($vendorModules) && !in_array($vendorModules, $paths, true)) {
+        if (DirectoryManager::pathExists($vendorModules) && !Arr::has($paths, $vendorModules, true)) {
             $paths[] = $vendorModules;
         }
 
@@ -127,7 +131,7 @@ class JenssBridge extends Obj implements IBridge
         }
 
         $resourceFile = __DIR__ . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'wise_resources.map';
-        if (!is_file($resourceFile)) {
+        if (!FileSystemManager::pathExists($resourceFile)) {
             return;
         }
 

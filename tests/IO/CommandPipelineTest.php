@@ -10,6 +10,7 @@ use BlueFission\Wise\Exe\BridgeRegistry;
 use BlueFission\Wise\Exe\BridgeResult;
 use BlueFission\Wise\Exe\IBridge;
 use BlueFission\Wise\Sys\FileSystemManager;
+use BlueFission\Wise\Sys\DirectoryManager;
 use BlueFission\Wise\Sys\KeyInputManager;
 use BlueFission\Wise\Sys\IO\CommandInputStream;
 use BlueFission\Wise\Sys\DisplayManager;
@@ -115,7 +116,7 @@ final class CommandPipelineTest extends TestCase
 
     private function removeDir(string $dir): void
     {
-        if (!is_dir($dir)) {
+        if (!DirectoryManager::pathExists($dir)) {
             return;
         }
 

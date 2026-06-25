@@ -3,6 +3,7 @@
 namespace BlueFission\Wise\Sys\IO;
 
 use BlueFission\Str;
+use BlueFission\Wise\Sys\FileSystemManager;
 
 class CommandInputStream implements IInputSource
 {
@@ -18,11 +19,11 @@ class CommandInputStream implements IInputSource
 
     public static function fromFile(string $path, bool $appendNewline = true): self
     {
-        $contents = is_file($path) ? file_get_contents($path) : '';
-        $contents = $contents !== false && Str::is($contents)
+        $contents = FileSystemManager::readPath($path);
+        $contents = Str::is($contents)
             ? rtrim($contents, "\r\n")
             : $contents;
-        $lines = $contents !== false && Str::is($contents)
+        $lines = Str::is($contents)
             ? preg_split("/\\r?\\n/", $contents)
             : [];
 

@@ -7,6 +7,7 @@ use BlueFission\Wise\Arc\ProcessManager;
 use BlueFission\Wise\Cmd\CommandProcessor;
 use BlueFission\Wise\Exe\BridgeRegistry;
 use BlueFission\Wise\Exe\VibeBridge;
+use BlueFission\Wise\Sys\DirectoryManager;
 use BlueFission\Wise\Sys\FileSystemManager;
 use BlueFission\Wise\Sys\DisplayManager;
 use BlueFission\Wise\Sys\Drivers\IDisplayDriver;
@@ -89,7 +90,7 @@ final class VibeBridgePipelineTest extends TestCase
 
     private function removeDir(string $dir): void
     {
-        if (!is_dir($dir)) {
+        if (!DirectoryManager::pathExists($dir)) {
             return;
         }
 
@@ -126,13 +127,13 @@ final class VibeBridgePipelineTest extends TestCase
         $tagRegistry = __DIR__ . '/../../vendor/bluefission/develation/src/Parsing/Registry/TagRegistry.php';
         $mixRegistry = __DIR__ . '/../../vendor/bluefission/vibrato/src/Vibrato/Parsing/Mix/MixRegistry.php';
 
-        if (!is_file($tagRegistry) || !is_file($mixRegistry)) {
+        if (!FileSystemManager::pathExists($tagRegistry) || !FileSystemManager::pathExists($mixRegistry)) {
             return false;
         }
 
-        $tagContents = file_get_contents($tagRegistry);
-        $mixContents = file_get_contents($mixRegistry);
-        if ($tagContents === false || $mixContents === false) {
+        $tagContents = FileSystemManager::readPath($tagRegistry);
+        $mixContents = FileSystemManager::readPath($mixRegistry);
+        if ($tagContents === '' || $mixContents === '') {
             return false;
         }
 

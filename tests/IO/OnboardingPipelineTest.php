@@ -7,6 +7,7 @@ use BlueFission\Wise\Arc\ProcessManager;
 use BlueFission\Wise\Cmd\CommandProcessor;
 use BlueFission\Wise\Exe\BridgeRegistry;
 use BlueFission\Wise\Exe\JenssBridge;
+use BlueFission\Wise\Sys\DirectoryManager;
 use BlueFission\Wise\Sys\FileSystemManager;
 use BlueFission\Wise\Sys\KeyInputManager;
 use BlueFission\Wise\Sys\IO\CommandInputStream;
@@ -35,10 +36,10 @@ final class OnboardingPipelineTest extends TestCase
         $this->root = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wise-onboard-' . uniqid();
         mkdir($this->root . DIRECTORY_SEPARATOR . 'cmd', 0777, true);
 
-        $source = file_get_contents(__DIR__ . '/../../examples/root/cmd/onboard.jss');
+        $source = FileSystemManager::readPath(__DIR__ . '/../../examples/root/cmd/onboard.jss');
         file_put_contents(
             $this->root . DIRECTORY_SEPARATOR . 'cmd' . DIRECTORY_SEPARATOR . 'onboard.jss',
-            $source !== false ? $source : ''
+            $source
         );
     }
 
@@ -102,7 +103,7 @@ final class OnboardingPipelineTest extends TestCase
 
     private function removeDir(string $dir): void
     {
-        if (!is_dir($dir)) {
+        if (!DirectoryManager::pathExists($dir)) {
             return;
         }
 

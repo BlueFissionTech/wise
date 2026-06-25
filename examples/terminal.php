@@ -8,6 +8,7 @@ use BlueFission\Wise\Arc\ProcessManager;
 use BlueFission\Wise\Sys\{
 	MemoryManager,
 	FileSystemManager,
+	DirectoryManager,
 	DisplayManager,
 	KeyInputManager,
 	Drivers\ConsoleDisplayDriver,
@@ -47,13 +48,14 @@ use BlueFission\IPC\IPC;
 use BlueFission\Data\Queues\MemQueue;
 
 $rootPath = dirname(__DIR__);
+require $rootPath . '/vendor/autoload.php';
+
 $virtualRoot = getenv('WISE_FS_ROOT') ?: ($rootPath . '/examples/root');
 $sessionLocation = $rootPath . DIRECTORY_SEPARATOR . 'artifacts';
-if (!is_dir($sessionLocation)) {
+if (!DirectoryManager::pathExists($sessionLocation)) {
     mkdir($sessionLocation, 0777, true);
 }
 
-require $rootPath . '/vendor/autoload.php';
 require_once $rootPath . '/src/Wise/Support/store.php';
 
 // ini_set('display_errors', 1);
