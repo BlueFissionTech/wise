@@ -3,7 +3,7 @@
     "description": "Workspace Intelligence Shell Environment for LLM Agents",
     "license": "MIT",
     "type": "package",
-    "keywords": ["shell, llm, ai, command line, cli"],
+    "keywords": ["shell", "llm", "ai", "command-line", "cli"],
     "authors": [
         {
             "name": "Devon Scott",
@@ -36,13 +36,6 @@
         },
         {
             "type": "path",
-            "url": "D:/projects/jenss-interpreter",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
             "url": "D:/projects/vibe-interpreter",
             "options": {
                 "symlink": true
@@ -61,7 +54,7 @@
             "options": {
                 "symlink": true
             },
-            "version": "1.3.5-alpha"
+            "version": "1.3.34-alpha"
         },
         {
             "type": "vcs",
@@ -90,7 +83,7 @@
     ],
     "minimum-stability": "dev",
     "require": {
-        "bluefission/develation": "dev-master as 1.3.5-alpha",
+        "bluefission/develation": "dev-master as 1.3.34-alpha",
         "bluefission/automata": "dev-master",
         "bluefission/simpleclients": "dev-master",
         "bluefission/synthetiq": "dev-main",
@@ -121,8 +114,8 @@
         ]
     },
     "autoload-dev": {
-        "psr-4": { 
-            "BlueFission\\Tests\\": "tests/" 
+        "psr-4": {
+            "BlueFission\\Tests\\": "tests/"
         }
     },
     "scripts": {
@@ -135,7 +128,9 @@
     },
     "config": {
         "allow-plugins": {
-            "php-http/discovery": true
+            "php-http/discovery": true,
+            "composer/installers": true,
+            "bluefission/bluecore": true
         }
     }
 }

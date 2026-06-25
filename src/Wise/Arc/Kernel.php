@@ -314,9 +314,6 @@ class Kernel {
     private function handleNative($request) {
         $output = $this->_commandHandler->handle($request);
         $this->_output = $output;
-        if (!$this->_batchMode) {
-            $this->_console->output($output, 'system');
-        }
         $this->recordMemoryOutput((string)$output);
     }
 

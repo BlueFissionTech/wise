@@ -7,6 +7,8 @@
 - Command aliases and extensible resources.
 - File system operations and memory management helpers.
 - Process management and system IO facilities.
+- JenSS bridge fixtures for command scripts, config scripts, agent readiness,
+  command prediction training, and resource event envelope shaping.
 
 ## Planned and Prioritized Features
 - Synthetiq as the default REPL prompt/template.
@@ -20,6 +22,8 @@
 - Default interpreter: jenss (first-class).
 - Template interpreter: vibe (opt-in or explicit routing).
 - Prompt and session template: synthetiq.
+- Fixture-backed interpreter tests cover JenSS command execution, prompt flows,
+  config parsing, and Automata-backed statement/feedback/language modules.
 
 ## Safety and Update Guarantees
 - Red-green-refactor workflow for all behavior changes.

@@ -150,7 +150,6 @@ class ConsoleDisplayUtil {
     }
 
     protected static function drawBuffer() {
-        $prevAnsiState = '';
 
         // Hide the cursor
         echo "\033[?25l";
@@ -169,6 +168,8 @@ class ConsoleDisplayUtil {
                 $length = max(mb_strlen($parsedNewLine['content']), mb_strlen($parsedCurrentLine['content']));
 
                 $lineBuffer = '';
+                $prevAnsiState = '';
+                $lineHasAnsi = false;
 
                 for ($j = 0; $j < $length; $j++) {
                     if ($j >= mb_strlen($parsedCurrentLine['content']) || $j >= mb_strlen($parsedNewLine['content']) || (mb_substr($parsedCurrentLine['content'], $j, 1) !== mb_substr($parsedNewLine['content'], $j, 1) || mb_substr($parsedNewLine['content'], $j, 1) == ' ')) {
@@ -176,6 +177,7 @@ class ConsoleDisplayUtil {
                         if (isset($parsedNewLine['ansiCodes'][$j])) {
                             $lineBuffer .= $parsedNewLine['ansiCodes'][$j];
                             $prevAnsiState = $parsedNewLine['ansiCodes'][$j];
+                            $lineHasAnsi = true;
                         } else {
                             // Apply the previous line's ANSI state if no new code
                             $lineBuffer .= $prevAnsiState;
@@ -195,7 +197,8 @@ class ConsoleDisplayUtil {
                 }
 
                 // Clear the line first and then print the updated line from buffer
-                echo "\033[2K" . $lineBuffer . "\033[0m";
+                $suffix = $lineHasAnsi ? "\033[0m" : '';
+                echo "\033[2K" . $lineBuffer . $suffix;
                 self::$_currentBuffer[$i] = self::$_newBuffer[$i];
             }
         }
