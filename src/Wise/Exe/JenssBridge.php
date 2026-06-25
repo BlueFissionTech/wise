@@ -44,30 +44,39 @@ class JenssBridge extends Obj implements IBridge
         $interpreterClass = $classes['interpreter'];
         $moduleRegistryClass = $classes['modules'];
 
-        $parser = new $parserClass();
-        $ast = $parser->parseFile($path);
+        try {
+            $parser = new $parserClass();
+            $ast = $parser->parseFile($path);
 
-        $io = new JenssIo($context);
-        $modulePaths = $this->modulePaths($context);
-        $modules = $modulePaths !== []
-            ? new $moduleRegistryClass($modulePaths)
-            : null;
-        $this->loadWiseResources($modules);
+            $io = new JenssIo($context);
+            $modulePaths = $this->modulePaths($context);
+            $modules = $modulePaths !== []
+                ? new $moduleRegistryClass($modulePaths)
+                : null;
+            $this->loadWiseResources($modules);
 
-        $interpreter = new $interpreterClass($io, null, $modules);
-        $interpreter->run($ast);
+            $interpreter = new $interpreterClass($io, null, $modules);
+            $interpreter->run($ast);
 
-        $result = BridgeResult::success(implode(PHP_EOL, $io->messages()), [
-            'path' => $path,
-            'messages' => $io->messages(),
-            'prompts' => $io->prompts(),
-        ]);
-        $this->dispatch(Event::COMPLETE, new Meta(data: ['path' => $path], src: $this));
-        return $result;
+            $result = BridgeResult::success(implode(PHP_EOL, $io->messages()), [
+                'path' => $path,
+                'messages' => $io->messages(),
+                'prompts' => $io->prompts(),
+            ]);
+            $this->dispatch(Event::COMPLETE, new Meta(data: ['path' => $path], src: $this));
+            return $result;
+        } catch (\Throwable $e) {
+            $this->dispatch(Event::FAILURE, new Meta(data: ['path' => $path, 'error' => $e->getMessage()], src: $this));
+            return BridgeResult::failure('JenSS execution failed: ' . $e->getMessage(), [
+                'path' => $path,
+                'exception' => $e::class,
+            ]);
+        }
     }
 
     public function runSource(string $source, BridgeContext $context, ?string $path = null): BridgeResult
     {
+        $path = $path ?? 'wise://inline.jss';
         $this->dispatch(Event::STARTED, new Meta(data: ['path' => $path], src: $this));
         $classes = $this->resolveRuntimeClasses();
         if ($classes === null) {
@@ -79,26 +88,34 @@ class JenssBridge extends Obj implements IBridge
         $interpreterClass = $classes['interpreter'];
         $moduleRegistryClass = $classes['modules'];
 
-        $parser = new $parserClass();
-        $ast = $parser->parse($source, $path);
+        try {
+            $parser = new $parserClass();
+            $ast = $parser->parse($source, $path);
 
-        $io = new JenssIo($context);
-        $modulePaths = $this->modulePaths($context);
-        $modules = $modulePaths !== []
-            ? new $moduleRegistryClass($modulePaths)
-            : null;
-        $this->loadWiseResources($modules);
+            $io = new JenssIo($context);
+            $modulePaths = $this->modulePaths($context);
+            $modules = $modulePaths !== []
+                ? new $moduleRegistryClass($modulePaths)
+                : null;
+            $this->loadWiseResources($modules);
 
-        $interpreter = new $interpreterClass($io, null, $modules);
-        $interpreter->run($ast);
+            $interpreter = new $interpreterClass($io, null, $modules);
+            $interpreter->run($ast);
 
-        $result = BridgeResult::success(implode(PHP_EOL, $io->messages()), [
-            'path' => $path,
-            'messages' => $io->messages(),
-            'prompts' => $io->prompts(),
-        ]);
-        $this->dispatch(Event::COMPLETE, new Meta(data: ['path' => $path], src: $this));
-        return $result;
+            $result = BridgeResult::success(implode(PHP_EOL, $io->messages()), [
+                'path' => $path,
+                'messages' => $io->messages(),
+                'prompts' => $io->prompts(),
+            ]);
+            $this->dispatch(Event::COMPLETE, new Meta(data: ['path' => $path], src: $this));
+            return $result;
+        } catch (\Throwable $e) {
+            $this->dispatch(Event::FAILURE, new Meta(data: ['path' => $path, 'error' => $e->getMessage()], src: $this));
+            return BridgeResult::failure('JenSS execution failed: ' . $e->getMessage(), [
+                'path' => $path,
+                'exception' => $e::class,
+            ]);
+        }
     }
 
     /**

@@ -3,6 +3,9 @@
 
 namespace BlueFission\Wise;
 
+use BlueFission\Arr;
+use BlueFission\Num;
+use BlueFission\Str;
 use BlueFission\Wise\Arc\Kernel;
 use BlueFission\Wise\Arc\ProcessManager;
 use BlueFission\Wise\Sys\{
@@ -32,6 +35,7 @@ use BlueFission\Cli\Util\Tty;
 use BlueFission\Cli\Util\ProgressBar;
 use BlueFission\Cli\Util\StatusBar;
 use BlueFission\Async\{Heap, Thread, Fork};
+use BlueFission\Data\FileSystem;
 use BlueFission\Data\Storage\{Disk, Memory, SQLite};
 use BlueFission\Automata\Language\{
 	Interpreter,
@@ -47,14 +51,15 @@ use BlueFission\IPC\IPC;
 use BlueFission\Data\Queues\MemQueue;
 
 $rootPath = dirname(__DIR__);
-$virtualRoot = getenv('WISE_FS_ROOT') ?: ($rootPath . '/examples/root');
-$sessionLocation = $rootPath . DIRECTORY_SEPARATOR . 'artifacts';
-if (!is_dir($sessionLocation)) {
-    mkdir($sessionLocation, 0777, true);
-}
-
 require $rootPath . '/vendor/autoload.php';
 require_once $rootPath . '/src/Wise/Support/store.php';
+
+$virtualRoot = getenv('WISE_FS_ROOT') ?: ($rootPath . DIRECTORY_SEPARATOR . 'examples' . DIRECTORY_SEPARATOR . 'root');
+$sessionLocation = $rootPath . DIRECTORY_SEPARATOR . 'artifacts';
+$sessionDirectory = new FileSystem(['root' => $rootPath, 'filter' => []]);
+if (!$sessionDirectory->exists($sessionLocation)) {
+    $sessionDirectory->mkdir('artifacts');
+}
 
 // ini_set('display_errors', 1);
 // ini_set('display_startup_errors', 1);
@@ -180,7 +185,7 @@ $inputStream = $inputFile ? CommandInputStream::fromFile($inputFile) : null;
 $batchMode = $inputStream !== null;
 
 $displayMode = getenv('WISE_DISPLAY_MODE');
-$displayMode = $displayMode ? strtolower(trim($displayMode)) : ($batchMode ? 'static' : 'dynamic');
+$displayMode = $displayMode ? Str::lower(Str::trim($displayMode)) : ($batchMode ? 'static' : 'dynamic');
 if (!$batchMode && $displayMode === 'dynamic' && !Tty::isTty(STDOUT)) {
     $displayMode = 'static';
 }
@@ -210,12 +215,18 @@ $outputFile = getenv('WISE_OUTPUT_FILE');
 $outputAppend = filter_var(getenv('WISE_OUTPUT_APPEND') ?: '0', FILTER_VALIDATE_BOOLEAN);
 $outputTargets = getenv('WISE_OUTPUT_TARGETS');
 $displayDriver = null;
-if ($outputTargets !== false && trim($outputTargets) !== '') {
-    $targets = array_filter(array_map('trim', explode(',', $outputTargets)));
+if ($outputTargets !== false && Str::trim($outputTargets) !== '') {
+    $targets = [];
+    foreach (explode(',', $outputTargets) as $target) {
+        $target = Str::trim($target);
+        if ($target !== '') {
+            $targets[] = $target;
+        }
+    }
     $drivers = [];
 
     foreach ($targets as $target) {
-        $target = strtolower($target);
+        $target = Str::lower($target);
         if ($target === 'buffer') {
             $drivers[] = new BufferDisplayDriver();
             continue;
@@ -232,16 +243,16 @@ if ($outputTargets !== false && trim($outputTargets) !== '') {
             }
             continue;
         }
-        if (str_starts_with($target, 'file:')) {
-            $path = trim(substr($target, strlen('file:')));
+        if (Str::startsWith($target, 'file:')) {
+            $path = Str::trim(Str::sub($target, Str::len('file:')));
             $path = $path !== '' ? $path : ($outputFile ?: 'wise_output.txt');
             $drivers[] = new StreamDisplayDriver($path, $outputAppend);
         }
     }
 
-    if (count($drivers) > 1) {
+    if (Arr::count($drivers) > 1) {
         $displayDriver = new CompositeDisplayDriver($drivers);
-    } elseif (count($drivers) === 1) {
+    } elseif (Arr::count($drivers) === 1) {
         $displayDriver = $drivers[0];
     }
 }
@@ -302,7 +313,7 @@ $bootStages = [
 ];
 $bootProgress = null;
 if (!$batchMode) {
-    $progressTotal = count($bootStages) * 100;
+    $progressTotal = Arr::count($bootStages) * 100;
     $progressBar = new ProgressBar($progressTotal);
     $statusBar = new StatusBar();
     $seenStages = [];
@@ -320,7 +331,7 @@ if (!$batchMode) {
             return;
         }
         if (!isset($seenStages[$stage])) {
-            $seenStages[$stage] = count($seenStages) + 1;
+            $seenStages[$stage] = Arr::count($seenStages) + 1;
         }
 
         $index = $seenStages[$stage];
@@ -330,7 +341,7 @@ if (!$batchMode) {
         }
         $overallCurrent = (($index - 1) * 100) + max(1, $subPercent);
         $progressBar->setCurrent(min($overallCurrent, $progressTotal));
-        $statusBar->set('step', $index . '/' . count($bootStages));
+        $statusBar->set('step', $index . '/' . Arr::count($bootStages));
         $statusBar->set('stage', $bootStages[$stage]);
         if (isset($meta['sub_current'], $meta['sub_total']) && $meta['sub_total'] > 0) {
             $statusBar->set('progress', $meta['sub_current'] . '/' . $meta['sub_total']);
@@ -363,7 +374,6 @@ $workingMemory = new WorkingMemoryCoordinator(
 );
 $memoryAdapter = new SynthetiqMemoryAdapter($workingMemory, new Profile('system', ['system']));
 
-// Create and initialize the kernel
 $navigator = null;
 if (!$batchMode) {
     $console->output('Loading W.I.S.E...', 'system');
@@ -385,12 +395,12 @@ $kernel = new Kernel(
         null,
         $navigator
     ),
-    new MemoryManager(300, 60),  // MemoryManager with 300 seconds threshold and 60 seconds monitoring interval
-    new FileSystemManager(['root'=>$virtualRoot]),
-    new Interpreter( new Grammar( new StemmerLemmatizer(), $grammarRules ), new Documenter(), new Walker() ),
-    $console, // Our console object we previously setup
-    new Disk(['location'=>$sessionLocation, 'name'=>'storage.json']),
-    new SQLite(['database'=>$rootPath . '/database.db']),
+    new MemoryManager(300, 60),
+    new FileSystemManager(['root' => $virtualRoot]),
+    new Interpreter(new Grammar(new StemmerLemmatizer(), $grammarRules), new Documenter(), new Walker()),
+    $console,
+    new Disk(['location' => $sessionLocation, 'name' => 'storage.json']),
+    new SQLite(['database' => $rootPath . DIRECTORY_SEPARATOR . 'database.db']),
     new IPC(new Memory())
 );
 
@@ -405,12 +415,12 @@ $kernel->setWorkingMemory($workingMemory);
 $kernel->setProfile(new Profile(getenv('WISE_PROFILE_ID') ?: 'console', ['user']));
 
 $globalMax = getenv('WISE_MEMORY_MAX_GLOBAL');
-if ($globalMax !== false && is_numeric($globalMax)) {
+if ($globalMax !== false && Num::is($globalMax)) {
     $kernel->setWorkingMemoryMaxSize('global', (int)$globalMax);
 }
 
 $userMax = getenv('WISE_MEMORY_MAX_USER');
-if ($userMax !== false && is_numeric($userMax)) {
+if ($userMax !== false && Num::is($userMax)) {
     $kernel->setWorkingMemoryMaxSize('user', (int)$userMax, $kernel->profile()?->id());
 }
 
@@ -434,7 +444,7 @@ if (!$batchMode && $statusLine && $screen && $repl) {
 }
 if (!$batchMode && $repl && isset($splash)) {
     $splashLines = $splash->draw();
-    $splashText = is_array($splashLines) ? implode(PHP_EOL, $splashLines) : '';
+    $splashText = Arr::is($splashLines) ? implode(PHP_EOL, $splashLines) : '';
     if ($splashText !== '') {
         $repl->addContent($splashText);
         $console->display();
@@ -452,7 +462,7 @@ if ($batchMode) {
             break;
         }
 
-        $command = trim($chunk);
+        $command = Str::trim($chunk);
         if ($command === '') {
             continue;
         }

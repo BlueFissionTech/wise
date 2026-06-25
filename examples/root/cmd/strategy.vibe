@@ -9,14 +9,14 @@ Prefer numbered steps and highlight the next immediate action.
 
 {#let modes=["plan","diagnose","decide","review"]}
 
-Topic: {=topic}
-Mode: {=mode:text -> $.trim().lower() options=modes default="plan"}
-Context: {=context}
-Constraints: {=constraints}
-Resources: {=resources}
-Desired outcome: {=outcome}
+Topic: {=topic max_tokens=30 temperature=0}
+Mode: {=mode:text -> $.trim().lower() options=modes default="plan" max_tokens=10 temperature=0}
+Context: {=context max_tokens=80 temperature=0}
+Constraints: {=constraints max_tokens=80 temperature=0}
+Resources: {=resources max_tokens=60 temperature=0}
+Desired outcome: {=outcome max_tokens=50 temperature=0}
 
 Plan:
-{=plan}
+{=plan max_tokens=180 temperature=0}
 
-Next action: {=nextAction}
+Next action: {=nextAction max_tokens=40 temperature=0}

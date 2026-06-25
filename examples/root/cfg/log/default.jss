@@ -3,6 +3,6 @@
 $logConfig
 set $logConfig to [
     "level"="info",
-    "alerts"=["console"],
+    "alerts"="console",
     "retentionDays"=7
 ];

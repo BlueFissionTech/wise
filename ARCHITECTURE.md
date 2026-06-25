@@ -20,6 +20,21 @@ and process control.
 4. ProcessManager and Async coordinate long-running or parallel work.
 5. DisplayManager renders output and refreshes the terminal view.
 
+## Resource Output Events
+Resources emit agent-readable output envelopes through:
+
+- `wise.resource.output` for a unique output change.
+- `wise.resource.output.refresh` for a repeated render of the same output.
+- `wise.resource.waiting` when the output expects follow-up input.
+
+Output payloads include `output_id`, `resource_name`, `action`, `status`,
+`waiting`, `completed`, `timestamp`, `hash`, preview text, optional
+`full_output`, and optional `semantic_metadata`. Repeated renders reuse the
+same `output_id` and set `repeated=true` on the refresh event. Waiting payloads
+carry the same `output_id`, options, prompt state metadata, and
+`status=waiting` so headless agents can preserve prompt recovery state without
+scraping terminal text.
+
 ## Interpreter Integration
 - Interpreters implement a stable contract (interface) and are injected into
   the command pipeline.

@@ -3,7 +3,9 @@ namespace BlueFission\Wise\Res;
 
 use BlueFission\Behavioral\Behaviors\Event;
 use BlueFission\Behavioral\Behaviors\Meta;
+use BlueFission\Arr;
 use BlueFission\DevElation as Dev;
+use BlueFission\Num;
 use BlueFission\Services\Service;
 use BlueFission\Str;
 
@@ -32,6 +34,7 @@ abstract class BaseResource extends Service {
     protected array $_outputMeta = [];
     protected ?string $_lastOutputHash = null;
     protected ?string $_lastOptionsHash = null;
+    protected ?string $_currentAction = null;
     protected int $_outputPreviewLines = 3;
     protected int $_outputPreviewChars = 240;
     protected int $_outputFullMax = 2000;
@@ -60,13 +63,14 @@ abstract class BaseResource extends Service {
     {
         $this->resetOutputTracking();
         $action = $behavior->name();
+        $this->_currentAction = $action;
 
         $actions = [];
         foreach ($this->_actions as $verb) {
             $actions[] = $this->resolveAction($verb);
         }
 
-        if (!in_array($action, $actions)) {
+        if (!Arr::has($actions, $action, true)) {
             $response = "I'm sorry, Invalid action for this resource ({$action})." . PHP_EOL . PHP_EOL;
             $response .= $this->help();
             $this->setOutputType('error', [
@@ -143,7 +147,7 @@ abstract class BaseResource extends Service {
         $item = $this->_itemName ?? $this->_name;
 
         $response = "";
-        if (count($args) > 0) {
+        if (Arr::count($args) > 0) {
             $name = $args[0];
             $entry = $this->retrieve($name);
             if ($entry === null) {
@@ -213,7 +217,7 @@ abstract class BaseResource extends Service {
         }
 
         // Get the generated object
-        $object = trim($gpt3_response['choices'][0]['text']);
+        $object = Str::trim($gpt3_response['choices'][0]['text']);
 
         $this->_response = $object;
         $this->setOutputType('generate', [
@@ -275,8 +279,9 @@ abstract class BaseResource extends Service {
                 $entry = $this->retrieve($name);
             }
 
-            if (isset($entry) && isset($entry[trim($key)]) && $entry[trim($key)] !== '') {
-                $value = $entry[trim($key)];
+            $property = Str::trim((string)$key);
+            if (isset($entry) && isset($entry[$property]) && $entry[$property] !== '') {
+                $value = $entry[$property];
                 $this->_response = "The value of '{$key}' is '{$value}'.";
                 $this->setOutputType('property', [
                     'property' => $key,
@@ -307,7 +312,7 @@ abstract class BaseResource extends Service {
 
         $this->refreshList();
         $response = "";
-        if (count($args) > 0 && !is_numeric($args[0])) {
+        if (Arr::count($args) > 0 && !Num::is($args[0])) {
             $key = $args[0];
             $list = $this->retrieve($key);
 
@@ -332,21 +337,21 @@ abstract class BaseResource extends Service {
     {
         $item = $this->_itemName ?? $this->_name;
         $plural = $this->pluralize($this->_name);
-        $page = count($args) >= 1 ? (int)$args[0] : $this->_page;
-        if (count($args) >= 2) {
+        $page = Arr::count($args) >= 1 ? (int)$args[0] : $this->_page;
+        if (Arr::count($args) >= 2) {
             $this->_perPage = (int)$args[0];
             $page = (int)$args[1];
         }
 
         $this->_page = $page;
-        $entries = array_keys($this->_entries);
+        $entries = Arr::keys($this->_entries);
 
         if ($entries !== null) {
             if ($this->_perPage < 1) {
                 $this->_perPage = 25;
             }
 
-            $total = count($entries);
+            $total = Arr::count($entries);
             $totalPages = ceil($total / $this->_perPage);
 
             if ($page < 1) {
@@ -404,10 +409,10 @@ abstract class BaseResource extends Service {
 
     protected function subList($args)
     {
-        if (count($args) > 2) {
+        if (Arr::count($args) > 2) {
             $this->_perSubPage = (int)$args[1];
             $this->_subPage = (int)$args[2];
-        } elseif (count($args) > 1) {
+        } elseif (Arr::count($args) > 1) {
             $this->_subPage = (int)$args[1];
         }
 
@@ -418,11 +423,11 @@ abstract class BaseResource extends Service {
         $perPage = $this->_perSubPage ;
 
 
-        if (isset($list) && is_array($list)) {
+        if (isset($list) && Arr::is($list)) {
             if ($perPage < 1) {
                 $perPage = 25;
             }
-            $total = count($list);
+            $total = Arr::count($list);
             $totalPages = ceil($total / $perPage);
 
             if ($page < 1) {
@@ -440,7 +445,7 @@ abstract class BaseResource extends Service {
             $pageItems = [];
             foreach ($list as $title=>$entry) {
                 if ($i >= $start && $i <= $end) {
-                    $name = (is_string($entry) ? $entry : $entry['name']);
+                    $name = (Str::is($entry) ? $entry : $entry['name']);
                     $response .= "- {$name}\n";
                     $count++;
                     $pageItems[] = $name;
@@ -472,7 +477,7 @@ abstract class BaseResource extends Service {
 
 	protected function next($args)
     {
-        $perPage = count($args) >= 1 ? (int)$args[0] : $this->_perPage;
+        $perPage = Arr::count($args) >= 1 ? (int)$args[0] : $this->_perPage;
 
         if ($perPage !== null) {
             $this->_perPage = $perPage;
@@ -484,7 +489,7 @@ abstract class BaseResource extends Service {
 
     protected function previous($args)
     {
-        $perPage = count($args) >= 1 ? (int)$args[0] : $this->_perPage;
+        $perPage = Arr::count($args) >= 1 ? (int)$args[0] : $this->_perPage;
 
         if ($perPage !== null) {
             $this->_perPage = $perPage;
@@ -505,7 +510,7 @@ abstract class BaseResource extends Service {
         $this->_response = $response;
         $this->setOutputType('list', [
             'list_type' => 'all',
-            'count' => count($entries),
+            'count' => Arr::count($entries),
             'items' => $entries,
         ]);
     }
@@ -516,7 +521,7 @@ abstract class BaseResource extends Service {
         $item = $this->_itemName ?? $this->_name;
         $plural = $this->pluralize($this->_name);
 
-        if (count($args) > 0) {
+        if (Arr::count($args) > 0) {
             $keyword = $args[0];
             $lists = [];
             $objects = [];
@@ -524,21 +529,21 @@ abstract class BaseResource extends Service {
             $entries = $this->_entries;
 
             foreach ($entries as $name => $entry) {
-                if (stripos($name, $keyword) !== false) {
+                if (Str::has(Str::lower((string)$name), Str::lower((string)$keyword))) {
                     $lists[] = $name;
                 }
 
-                if ( is_array($entry) ) {
+                if ( Arr::is($entry) ) {
                     foreach ($entry as $object) {
-                        if ( is_array($object) ) {
-                            if (stripos($object[$this->_key], $keyword) !== false) {
+                        if ( Arr::is($object) ) {
+                            if (Str::has(Str::lower((string)$object[$this->_key]), Str::lower((string)$keyword))) {
                                 $objects[] = [
                                     'parent' => $name,
                                     $this->_key => $item[$this->_key]
                                 ];
                             }
                         } else {
-                            if (stripos($object, $keyword) !== false) {
+                            if (Str::has(Str::lower((string)$object), Str::lower((string)$keyword))) {
                                 $objects[] = [
                                     'parent' => $name,
                                     $this->_key => $object
@@ -548,7 +553,7 @@ abstract class BaseResource extends Service {
                     }
                 }
             }
-            if ( !empty($objects) ) {
+            if ( Arr::isNotEmpty($objects) ) {
                 usort($objects, function ($a, $b) {
                     if ($a[$this->_key] === null) {
                         return 1;
@@ -561,7 +566,7 @@ abstract class BaseResource extends Service {
             }
 
             $response = "";
-            if ( count($lists) > 0 ) {
+            if ( Arr::count($lists) > 0 ) {
                 $response .= "Found {$plural}:\n";
                 foreach ($lists as $list) {
                     $response .= "- {$list}\n";
@@ -574,7 +579,7 @@ abstract class BaseResource extends Service {
                 if ($response !== "") {
                     $response .= "\n";
                 }
-                if ( count($objects) > 0 ) {
+                if ( Arr::count($objects) > 0 ) {
                     $response .= "Found ".$this->pluralize($this->_subItemName).":\n";
                     foreach ($objects as $object) {
                         $response .= "- {$object[$this->_key]} (from {$item}: {$object['parent']})\n";
@@ -593,14 +598,14 @@ abstract class BaseResource extends Service {
                 'keyword' => $keyword,
                 'list_matches' => $lists,
                 'item_matches' => $itemMatches,
-                'list_count' => count($lists),
-                'item_count' => count($itemMatches),
+                'list_count' => Arr::count($lists),
+                'item_count' => Arr::count($itemMatches),
             ]);
             $this->_response = $response;
         } else {
             $verb = 'find';
             foreach ($this->_verbs['find'] as $verb) {
-                if ( in_array($verb, $this->_actions) ) {
+                if ( Arr::has($this->_actions, $verb, true) ) {
                     break;
                 }
             }
@@ -722,22 +727,22 @@ abstract class BaseResource extends Service {
         $item = $this->_itemName ?? $this->_name;
 
         $response = "";
-        if (count($args) == 1) {
+        if (Arr::count($args) == 1) {
             $parts = explode(' ', $args[0], 2);
-        } elseif (count($args) > 1) {
+        } elseif (Arr::count($args) > 1) {
             $parts = $args;
         } else {
             $parts = [];
         }
 
-        if (count($parts) > 1) {
+        if (Arr::count($parts) > 1) {
             $itemName = isset($parts[0]) ? $parts[0] : null;
             $this->_listName = $listName = $parts[1];
             $list = $this->retrieve($listName);
             if ($list !== null) {
                 $itemExists = false;
                 foreach ($list as $entry) {
-                    $name = (is_string($entry) ? $entry : $entry['name']);
+                    $name = (Str::is($entry) ? $entry : $entry['name']);
                     if ($name === $itemName) {
                         $itemExists = true;
                         break;
@@ -901,7 +906,7 @@ abstract class BaseResource extends Service {
     {
         $this->refreshList();
         $entries = $this->_entries;
-        $entries = array_keys($entries);
+        $entries = Arr::keys($entries);
 
         return $entries;
     }
@@ -920,7 +925,7 @@ abstract class BaseResource extends Service {
     protected function keep($entry)
     {
         $this->_selected = $entry;
-        $key = $this->_selected[$this->_key] ?? ( is_array($this->_entries) ? count($this->_entries) -1 : 0 );
+        $key = $this->_selected[$this->_key] ?? (Arr::is($this->_entries) ? Arr::count($this->_entries) -1 : 0);
         // die(var_dump($this->_listName, $this->_entries[$this->_listName], $key, $this->_key, $entry));
 
         if ( $this->_subItemName && $this->_listName && $this->_key ) {
@@ -949,7 +954,7 @@ abstract class BaseResource extends Service {
     protected function resolveAction($action)
     {
         foreach ($this->_verbs as $verb => $aliases) {
-            if (in_array($action, $aliases)) {
+            if (Arr::has($aliases, $action, true)) {
                 return $verb;
             }
         }
@@ -987,18 +992,18 @@ abstract class BaseResource extends Service {
 
     public function pluralize($text)
     {
-        return (!empty($this->_plural) && $text == $this->_name) ? $this->_plural : Str::pluralize($text);
+        return (Str::is($this->_plural) && $this->_plural !== '' && $text == $this->_name) ? $this->_plural : Str::pluralize($text);
     }
 
     public function article($text)
     {
-        $a = (in_array(substr($text, 0, 1), ['a', 'e', 'i', 'o', 'u']) ? 'an' : 'a');
+        $a = (Arr::has(['a', 'e', 'i', 'o', 'u'], Str::sub($text, 0, 1), true) ? 'an' : 'a');
         return $a;
     }
 
     protected function setOutputType(string $type, array $meta = []): void
     {
-        $payload = array_merge([
+        $payload = Arr::merge([
             'output_type' => $type,
             'item' => $this->_itemName ?? $this->_name,
         ], $meta);
@@ -1019,7 +1024,7 @@ abstract class BaseResource extends Service {
 
     protected function mergeOutputMeta(array $meta): void
     {
-        $this->_outputMeta = array_merge($this->_outputMeta, $meta);
+        $this->_outputMeta = Arr::merge($this->_outputMeta, $meta);
     }
 
     /**
@@ -1030,17 +1035,17 @@ abstract class BaseResource extends Service {
      */
     protected function setExpectedOptions(array|string $options, array $meta = []): void
     {
-        $options = is_array($options) ? $options : [$options];
+        $options = Arr::is($options) ? $options : [$options];
         $normalized = [];
         foreach ($options as $option) {
-            $option = trim((string)$option);
+            $option = Str::trim((string)$option);
             if ($option === '') {
                 continue;
             }
             $normalized[$option] = true;
         }
 
-        $this->_expectedOptions = array_keys($normalized);
+        $this->_expectedOptions = Arr::keys($normalized);
         $this->_expectedOptionsMeta = $meta;
     }
 
@@ -1065,7 +1070,7 @@ abstract class BaseResource extends Service {
     protected function emitOutputEventIfNeeded(?string $output = null): void
     {
         $output = $output ?? $this->_response ?? '';
-        if (!is_string($output) || $output === '') {
+        if (!Str::is($output) || $output === '') {
             return;
         }
 
@@ -1078,16 +1083,16 @@ abstract class BaseResource extends Service {
 
         $preview = $this->buildOutputPreview($output);
         $markdown = Dev::apply('wise.resource.output.markdown', $preview['text']);
+        $options = $this->expectedOptionsForOutput($output);
 
-        $payload = array_merge([
-            'resource' => $this->_name,
+        $payload = Arr::merge([
             'output' => $preview['text'],
             'lines' => $preview['lines'],
             'truncated' => $preview['truncated'],
-            'length' => strlen($output),
+            'length' => Str::len($output),
             'markdown' => $markdown,
             'hash' => $hash,
-        ], $this->buildFullOutputMeta($output), $this->_outputMeta);
+        ], $this->buildFullOutputMeta($output), $this->_outputMeta, $this->buildEventEnvelope($hash, $options));
 
         $payload = Dev::apply('wise.resource.output.meta', $payload);
 
@@ -1105,13 +1110,17 @@ abstract class BaseResource extends Service {
     protected function emitOutputRefreshEvent(string $output): void
     {
         $preview = $this->buildOutputPreview($output);
-        $payload = array_merge([
-            'resource' => $this->_name,
+        $hash = sha1($output);
+        $options = $this->expectedOptionsForOutput($output);
+        $payload = Arr::merge([
             'output' => $preview['text'],
             'lines' => $preview['lines'],
             'truncated' => $preview['truncated'],
-            'length' => strlen($output),
-        ], $this->buildFullOutputMeta($output), $this->_outputMeta);
+            'length' => Str::len($output),
+            'hash' => $hash,
+        ], $this->buildFullOutputMeta($output), $this->_outputMeta, $this->buildEventEnvelope($hash, $options), [
+            'repeated' => true,
+        ]);
 
         $payload = Dev::apply('wise.resource.output.refresh.meta', $payload);
 
@@ -1128,14 +1137,11 @@ abstract class BaseResource extends Service {
     protected function emitWaitingEventIfNeeded(?string $output = null): void
     {
         $output = $output ?? $this->_response ?? '';
-        if (!is_string($output) || $output === '') {
+        if (!Str::is($output) || $output === '') {
             return;
         }
 
-        $options = $this->_expectedOptions;
-        if ($options === []) {
-            $options = $this->extractOptionsFromResponse($output);
-        }
+        $options = $this->expectedOptionsForOutput($output);
 
         if ($options === []) {
             return;
@@ -1147,11 +1153,10 @@ abstract class BaseResource extends Service {
         }
         $this->_lastOptionsHash = $hash;
 
-        $payload = array_merge([
-            'resource' => $this->_name,
+        $payload = Arr::merge([
             'state' => 'waiting',
             'options' => $options,
-        ], $this->_expectedOptionsMeta);
+        ], $this->_expectedOptionsMeta, $this->buildWaitingEnvelope(sha1($output), $options));
 
         $payload = Dev::apply('wise.resource.waiting.meta', $payload);
 
@@ -1162,18 +1167,19 @@ abstract class BaseResource extends Service {
 
     protected function buildOutputPreview(string $output): array
     {
-        $normalized = str_replace(["\r\n", "\r"], "\n", $output);
+        $normalized = Str::replace($output, "\r\n", "\n");
+        $normalized = Str::replace($normalized, "\r", "\n");
         $lines = preg_split('/\n/', $normalized);
-        if (!is_array($lines) || $lines === []) {
+        if (!Arr::is($lines) || $lines === []) {
             $lines = [$output];
         }
 
-        $previewLines = array_slice($lines, 0, $this->_outputPreviewLines);
+        $previewLines = Arr::slice($lines, 0, $this->_outputPreviewLines);
         $previewText = implode(PHP_EOL, $previewLines);
-        $truncated = count($lines) > $this->_outputPreviewLines;
+        $truncated = Arr::count($lines) > $this->_outputPreviewLines;
 
-        if (strlen($previewText) > $this->_outputPreviewChars) {
-            $previewText = substr($previewText, 0, $this->_outputPreviewChars);
+        if (Str::len($previewText) > $this->_outputPreviewChars) {
+            $previewText = Str::sub($previewText, 0, $this->_outputPreviewChars);
             $truncated = true;
         }
 
@@ -1188,11 +1194,82 @@ abstract class BaseResource extends Service {
 
     protected function buildFullOutputMeta(string $output): array
     {
-        if (strlen($output) <= $this->_outputFullMax) {
+        if (Str::len($output) <= $this->_outputFullMax) {
             return ['full_output' => $output];
         }
 
         return [];
+    }
+
+    protected function expectedOptionsForOutput(string $output): array
+    {
+        if ($this->_expectedOptions !== []) {
+            return $this->_expectedOptions;
+        }
+
+        return $this->extractOptionsFromResponse($output);
+    }
+
+    protected function buildEventEnvelope(string $outputHash, array $options = []): array
+    {
+        $status = $this->eventStatus($options);
+        $envelope = [
+            'output_id' => $this->outputId($outputHash),
+            'resource' => $this->_name,
+            'resource_name' => $this->_name,
+            'action' => $this->_currentAction ?? 'unknown',
+            'status' => $status,
+            'waiting' => $status === 'waiting',
+            'completed' => $status !== 'waiting',
+            'timestamp' => date('c'),
+            'repeated' => false,
+        ];
+
+        if (array_key_exists('status', $this->_outputMeta)) {
+            $envelope['resource_status'] = $this->_outputMeta['status'];
+        }
+
+        if (!array_key_exists('semantic_metadata', $this->_outputMeta)) {
+            $envelope['semantic_metadata'] = null;
+        }
+
+        return $envelope;
+    }
+
+    protected function buildWaitingEnvelope(string $outputHash, array $options): array
+    {
+        return [
+            'output_id' => $this->outputId($outputHash),
+            'resource' => $this->_name,
+            'resource_name' => $this->_name,
+            'action' => $this->_currentAction ?? 'unknown',
+            'status' => 'waiting',
+            'waiting' => true,
+            'completed' => false,
+            'timestamp' => date('c'),
+            'options_hash' => sha1(implode('|', $options)),
+        ];
+    }
+
+    protected function outputId(string $outputHash): string
+    {
+        $source = implode('|', [
+            $this->_name,
+            $this->_currentAction ?? 'unknown',
+            $outputHash,
+        ]);
+
+        return 'wise-out-' . Str::sub(sha1($source), 0, 16);
+    }
+
+    protected function eventStatus(array $options): string
+    {
+        if (($this->_outputMeta['output_type'] ?? null) === 'error'
+            || array_key_exists('error', $this->_outputMeta)) {
+            return 'error';
+        }
+
+        return $options === [] ? 'completed' : 'waiting';
     }
 
     protected function extractOptionsFromResponse(string $response): array
@@ -1203,20 +1280,20 @@ abstract class BaseResource extends Service {
 
         $raw = $matches[1] ?? '';
         $parts = preg_split('/,|\bor\b/i', $raw);
-        if (!is_array($parts)) {
+        if (!Arr::is($parts)) {
             return [];
         }
 
         $options = [];
         foreach ($parts as $part) {
-            $part = trim($part, " \t\n\r\0\x0B\"");
+            $part = Str::trim($part, " \t\n\r\0\x0B\"");
             if ($part === '') {
                 continue;
             }
             $options[$part] = true;
         }
 
-        return array_keys($options);
+        return Arr::keys($options);
     }
 
     protected function defaultListOptions(array $args): array
@@ -1228,7 +1305,7 @@ abstract class BaseResource extends Service {
             "help with {$plural}",
         ];
 
-        if (count($args) > 0 && !is_numeric($args[0])) {
+        if (Arr::count($args) > 0 && !Num::is($args[0])) {
             $listName = (string)$args[0];
             $options[] = "previous {$this->_name} {$listName}";
             $options[] = "next {$this->_name} {$listName}";
