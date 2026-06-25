@@ -5,6 +5,7 @@ namespace BlueFission\Tests\IO;
 use BlueFission\Wise\Sys\Drivers\BufferDisplayDriver;
 use BlueFission\Wise\Sys\Drivers\CompositeDisplayDriver;
 use BlueFission\Wise\Sys\Drivers\StreamDisplayDriver;
+use BlueFission\Wise\Sys\FileSystemManager;
 use PHPUnit\Framework\TestCase;
 
 final class CompositeDisplayDriverTest extends TestCase
@@ -25,7 +26,7 @@ final class CompositeDisplayDriverTest extends TestCase
         $driver->print();
 
         $this->assertSame(["first\n", "second\n"], $buffer->output());
-        $this->assertSame("first\nsecond\n", file_get_contents($path));
+        $this->assertSame("first\nsecond\n", FileSystemManager::readPath($path));
 
         unlink($path);
     }

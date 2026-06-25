@@ -8,6 +8,7 @@ use BlueFission\Wise\Cmd\CommandProcessor;
 use BlueFission\Wise\Exe\BridgeRegistry;
 use BlueFission\Wise\Exe\VibeBridge;
 use BlueFission\Wise\Sys\FileSystemManager;
+use BlueFission\Wise\Sys\DirectoryManager;
 use BlueFission\Wise\Sys\KeyInputManager;
 use BlueFission\Wise\Sys\IO\CommandInputStream;
 use BlueFission\Wise\Sys\DisplayManager;
@@ -43,8 +44,8 @@ final class MessageResourcePipelineTest extends TestCase
         $resourceDir = $this->root . DIRECTORY_SEPARATOR . 'sys' . DIRECTORY_SEPARATOR . 'res';
         mkdir($resourceDir, 0777, true);
 
-        $source = file_get_contents(__DIR__ . '/../../examples/root/sys/res/message.vibe');
-        file_put_contents($resourceDir . DIRECTORY_SEPARATOR . 'message.vibe', $source !== false ? $source : '');
+        $source = FileSystemManager::readPath(__DIR__ . '/../../examples/root/sys/res/message.vibe');
+        file_put_contents($resourceDir . DIRECTORY_SEPARATOR . 'message.vibe', $source);
 
         $this->inputFile = $this->root . DIRECTORY_SEPARATOR . 'input.txt';
         file_put_contents($this->inputFile, "send new message to user \"hello!\"\nlist all messages\n");
@@ -140,7 +141,7 @@ final class MessageResourcePipelineTest extends TestCase
 
     private function removeDir(string $dir): void
     {
-        if (!is_dir($dir)) {
+        if (!DirectoryManager::pathExists($dir)) {
             return;
         }
 
@@ -163,7 +164,7 @@ final class MessageResourcePipelineTest extends TestCase
     private function deleteStorageArtifacts(): void
     {
         $storageFile = $this->storagePath . DIRECTORY_SEPARATOR . 'wise_test_storage.json';
-        if (is_file($storageFile)) {
+        if (FileSystemManager::pathExists($storageFile)) {
             @unlink($storageFile);
         }
     }

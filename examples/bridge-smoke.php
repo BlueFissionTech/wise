@@ -9,6 +9,7 @@ use BlueFission\Wise\Exe\JenssBridge;
 use BlueFission\Wise\Exe\VibeBridge;
 use BlueFission\Arr;
 use BlueFission\Str;
+use BlueFission\Wise\Sys\FileSystemManager;
 use BlueFission\Automata\LLM\Clients\IClient;
 use BlueFission\Automata\LLM\Reply;
 
@@ -25,7 +26,9 @@ final class ExampleFixtureLlmClient implements IClient
 
     public function generate($input, $config = [], ?callable $callback = null): Reply
     {
-        $response = (string)(array_shift($this->responses) ?? 'generated fixture response');
+        $responses = Arr::make($this->responses);
+        $response = (string)($responses->shift() ?? 'generated fixture response');
+        $this->responses = $responses->val();
         if ($callback) {
             $callback($response);
         }
@@ -170,13 +173,13 @@ function shouldSkipVibeMixRegistry(): bool
         . DIRECTORY_SEPARATOR . 'Mix'
         . DIRECTORY_SEPARATOR . 'MixRegistry.php';
 
-    if (!is_file($tagRegistry) || !is_file($mixRegistry)) {
+    if (!FileSystemManager::pathExists($tagRegistry) || !FileSystemManager::pathExists($mixRegistry)) {
         return false;
     }
 
-    $tagContents = file_get_contents($tagRegistry);
-    $mixContents = file_get_contents($mixRegistry);
-    if ($tagContents === false || $mixContents === false) {
+    $tagContents = FileSystemManager::readPath($tagRegistry);
+    $mixContents = FileSystemManager::readPath($mixRegistry);
+    if ($tagContents === '' || $mixContents === '') {
         return false;
     }
 
@@ -205,7 +208,11 @@ function promptResponder(): callable
     ];
 
     return function (string $prompt) use (&$responses): string {
-        return array_shift($responses) ?? 'example';
+        $queue = Arr::make($responses);
+        $response = $queue->shift() ?? 'example';
+        $responses = $queue->val();
+
+        return $response;
     };
 }
 

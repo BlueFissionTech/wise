@@ -3,6 +3,7 @@
 namespace BlueFission\Tests;
 
 use BlueFission\Connections\Stdio;
+use BlueFission\Wise\Sys\FileSystemManager;
 use PHPUnit\Framework\TestCase;
 
 final class StdioIoTest extends TestCase
@@ -20,7 +21,7 @@ final class StdioIoTest extends TestCase
 
         $stdio->send('hello');
 
-        $written = file_get_contents($outputPath);
+        $written = FileSystemManager::readPath($outputPath);
         $this->assertSame('hello', $written);
     }
 

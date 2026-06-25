@@ -260,7 +260,7 @@ class Kernel {
         }
 
         $path = is_string($request) ? $request : null;
-        if (!$path || !is_file($path)) {
+        if (!$path || !FileSystemManager::pathExists($path)) {
             $this->_output = "Script not found.";
             return;
         }
@@ -458,9 +458,9 @@ class Kernel {
     private function resolveScriptPath(string $path, string $basePath): ?string
     {
         $candidate = $path;
-        if (!is_file($candidate)) {
+        if (!FileSystemManager::pathExists($candidate)) {
             $candidate = $basePath . DIRECTORY_SEPARATOR . $path;
-            if (!is_file($candidate)) {
+            if (!FileSystemManager::pathExists($candidate)) {
                 return null;
             }
         }
@@ -507,12 +507,12 @@ class Kernel {
         $resourcePath = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Exe' . DIRECTORY_SEPARATOR . 'resources';
         $resourceResolver = function (string $key): ?array {
             $mapFile = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Exe' . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'wise_resources.map';
-            if (!is_file($mapFile)) {
+            if (!FileSystemManager::pathExists($mapFile)) {
                 return null;
             }
 
-            $contents = file_get_contents($mapFile);
-            if ($contents === false) {
+            $contents = FileSystemManager::readPath($mapFile);
+            if ($contents === '') {
                 return null;
             }
 

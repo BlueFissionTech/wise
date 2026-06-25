@@ -18,6 +18,8 @@ use BlueFission\Wise\Cmd\CommandProcessor;
 use BlueFission\Wise\Exe\BridgeContext;
 use BlueFission\Wise\Exe\BridgeRegistry;
 use BlueFission\Wise\Exe\JenssBridge;
+use BlueFission\Str;
+use BlueFission\Wise\Sys\DirectoryManager;
 use BlueFission\Wise\Sys\DisplayManager;
 use BlueFission\Wise\Sys\Drivers\IDisplayDriver;
 use BlueFission\Wise\Sys\FileSystemManager;
@@ -128,7 +130,7 @@ final class JenssStressScriptTest extends TestCase
             $result = $bridge->runFile($path, $context);
 
             $this->assertTrue($result->successFlag(), $result->output());
-            $this->assertSame('', trim($result->output()));
+            $this->assertSame('', Str::trim($result->output()));
         }
     }
 
@@ -165,12 +167,12 @@ final class JenssStressScriptTest extends TestCase
         $targetPath = $this->root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
         $targetDir = dirname($targetPath);
 
-        if (!is_dir($targetDir)) {
+        if (!DirectoryManager::pathExists($targetDir)) {
             mkdir($targetDir, 0777, true);
         }
 
-        $source = file_get_contents($sourcePath);
-        file_put_contents($targetPath, $source !== false ? $source : '');
+        $source = FileSystemManager::readPath($sourcePath);
+        file_put_contents($targetPath, $source);
     }
 
     private function requireJenss(): void
@@ -183,7 +185,7 @@ final class JenssStressScriptTest extends TestCase
 
     private function removeDir(string $dir): void
     {
-        if (!is_dir($dir)) {
+        if (!DirectoryManager::pathExists($dir)) {
             return;
         }
 

@@ -11,6 +11,8 @@ use BlueFission\Automata\Analysis\KeywordTopicAnalyzer;
 use BlueFission\Automata\Strategy\NaiveBayesTextClassification;
 use BlueFission\Automata\Context;
 use BlueFission\Str;
+use BlueFission\Wise\Sys\DirectoryManager;
+use BlueFission\Wise\Sys\FileSystemManager;
 
 class SynthetiqBootstrap
 {
@@ -24,14 +26,14 @@ class SynthetiqBootstrap
         $root = dirname(__DIR__, 3);
         $configPath = $basePath ?? $root . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'bluefission' . DIRECTORY_SEPARATOR . 'synthetiq' . DIRECTORY_SEPARATOR . 'sample_configs';
 
-        if (!is_dir($configPath)) {
+        if (!DirectoryManager::pathExists($configPath)) {
             throw new \RuntimeException('Synthetiq sample configs not found at: ' . $configPath);
         }
 
         self::emitProgress($progress, 'configs', 'Loading Synthetiq configs...');
 
         $skills = $configPath . DIRECTORY_SEPARATOR . 'skills.php';
-        if (is_file($skills)) {
+        if (FileSystemManager::pathExists($skills)) {
             require $skills;
         }
 
@@ -68,12 +70,12 @@ class SynthetiqBootstrap
 
         $modelDir = $config['model_path'] ?? (dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'artifacts' . DIRECTORY_SEPARATOR . 'models' . DIRECTORY_SEPARATOR . 'synthetiq');
         $modelDir = rtrim($modelDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-        if (!is_dir($modelDir)) {
+        if (!DirectoryManager::pathExists($modelDir)) {
             mkdir($modelDir, 0777, true);
         }
 
         $modelFile = self::resolveModelPath($modelDir, KeywordTopicAnalyzer::class);
-        if (is_file($modelFile)) {
+        if (FileSystemManager::pathExists($modelFile)) {
             self::emitProgress($progress, 'model', 'Loading cached topic model...', ['cache' => true]);
         } else {
             self::emitProgress($progress, 'model', 'Preparing topic model cache...', ['cache' => false]);
@@ -111,7 +113,7 @@ class SynthetiqBootstrap
             ],
         ]);
 
-        $intentCacheHit = is_file($intentModelPath);
+        $intentCacheHit = FileSystemManager::pathExists($intentModelPath);
         self::emitProgress($progress, 'routes', 'Training intent routes...', ['cache' => $intentCacheHit]);
         self::trainRoutes($ai, $dialogue, $intentBoosts, $progress);
         self::warmIntentRouter($ai);

@@ -2,6 +2,7 @@
 
 namespace BlueFission\Wise\Cmd;
 
+use BlueFission\Arr;
 use BlueFission\Wise\Arc\Kernel;
 use BlueFission\Data\FileSystem;
 use BlueFission\Wise\Res\ResourceHelper;
@@ -30,9 +31,9 @@ class CommandHandler {
     public function handle($command) {
         // Parse the command and execute the corresponding method
         
-        $parts = explode(' ', $command);
-        $commandName = array_shift($parts);
-        $args = $parts;
+        $parts = Arr::make(explode(' ', $command));
+        $commandName = $parts->shift();
+        $args = $parts->val();
 
         if (isset($this->_aliases[$commandName])) {
             $commandName = $this->_aliases[$commandName];

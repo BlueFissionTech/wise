@@ -2,12 +2,15 @@
 
 namespace BlueFission\Tests\Examples;
 
+use BlueFission\Arr;
 use BlueFission\Automata\LLM\Clients\IClient;
 use BlueFission\Automata\LLM\Reply;
+use BlueFission\Str;
 use BlueFission\Wise\Exe\BridgeContext;
 use BlueFission\Wise\Exe\BridgeRegistry;
 use BlueFission\Wise\Exe\JenssBridge;
 use BlueFission\Wise\Exe\VibeBridge;
+use BlueFission\Wise\Sys\FileSystemManager;
 use PHPUnit\Framework\TestCase;
 
 final class ExampleBridgeSmokeTest extends TestCase
@@ -22,7 +25,7 @@ final class ExampleBridgeSmokeTest extends TestCase
     public function testBatchCommandExampleDocumentsCurrentScripts(): void
     {
         $path = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'examples' . DIRECTORY_SEPARATOR . 'batch-commands.txt';
-        $contents = file_get_contents($path);
+        $contents = FileSystemManager::readPath($path);
 
         $this->assertIsString($contents);
         $this->assertStringContainsString('hello', $contents);
@@ -141,12 +144,12 @@ final class ExampleBridgeSmokeTest extends TestCase
                 continue;
             }
 
-            if (!in_array(strtolower($file->getExtension()), $extensions, true)) {
+            if (!Arr::has($extensions, Str::lower($file->getExtension()), true)) {
                 continue;
             }
 
-            $relativePath = substr($file->getPathname(), strlen($root) + 1);
-            $relativePath = str_replace(DIRECTORY_SEPARATOR, '/', $relativePath);
+            $relativePath = Str::sub($file->getPathname(), Str::len($root) + 1);
+            $relativePath = Str::replace($relativePath, DIRECTORY_SEPARATOR, '/');
             $cases[$relativePath] = [$relativePath];
         }
 
@@ -189,17 +192,17 @@ final class ExampleBridgeSmokeTest extends TestCase
             . DIRECTORY_SEPARATOR . 'Mix'
             . DIRECTORY_SEPARATOR . 'MixRegistry.php';
 
-        if (!is_file($tagRegistry) || !is_file($mixRegistry)) {
+        if (!FileSystemManager::pathExists($tagRegistry) || !FileSystemManager::pathExists($mixRegistry)) {
             return false;
         }
 
-        $tagContents = file_get_contents($tagRegistry);
-        $mixContents = file_get_contents($mixRegistry);
-        if ($tagContents === false || $mixContents === false) {
+        $tagContents = FileSystemManager::readPath($tagRegistry);
+        $mixContents = FileSystemManager::readPath($mixRegistry);
+        if ($tagContents === '' || $mixContents === '') {
             return false;
         }
 
-        return str_contains($tagContents, '(?P<{$tag}>') && str_contains($mixContents, 'mix:');
+        return Str::has($tagContents, '(?P<{$tag}>') && Str::has($mixContents, 'mix:');
     }
 
     private function promptResponder(): callable
@@ -221,7 +224,11 @@ final class ExampleBridgeSmokeTest extends TestCase
         ];
 
         return function (string $prompt) use (&$responses): string {
-            return array_shift($responses) ?? 'example';
+            $queue = Arr::make($responses);
+            $response = $queue->shift() ?? 'example';
+            $responses = $queue->val();
+
+            return $response;
         };
     }
 
@@ -295,7 +302,9 @@ final class ExampleFixtureLlmClient implements IClient
 
     public function generate($input, $config = [], ?callable $callback = null): Reply
     {
-        $response = (string)(array_shift($this->responses) ?? 'generated fixture response');
+        $responses = Arr::make($this->responses);
+        $response = (string)($responses->shift() ?? 'generated fixture response');
+        $this->responses = $responses->val();
         if ($callback) {
             $callback($response);
         }

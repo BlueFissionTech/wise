@@ -11,6 +11,7 @@ use BlueFission\Wise\Arc\ProcessManager;
 use BlueFission\Wise\Sys\{
 	MemoryManager,
 	FileSystemManager,
+	DirectoryManager,
 	DisplayManager,
 	KeyInputManager,
 	Drivers\ConsoleDisplayDriver,

@@ -4,6 +4,7 @@ namespace BlueFission\Tests;
 
 use BlueFission\Wise\Nav\SynthetiqBootstrap;
 use BlueFission\Wise\Nav\SynthetiqProxy;
+use BlueFission\Wise\Sys\DirectoryManager;
 use PHPUnit\Framework\TestCase;
 
 final class SynthetiqBootstrapTest extends TestCase
@@ -14,7 +15,7 @@ final class SynthetiqBootstrapTest extends TestCase
     public function testBootstrapCreatesNavigatorAndResponds(): void
     {
         $vendorPath = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'bluefission' . DIRECTORY_SEPARATOR . 'synthetiq' . DIRECTORY_SEPARATOR . 'sample_configs';
-        if (!is_dir($vendorPath)) {
+        if (!DirectoryManager::pathExists($vendorPath)) {
             $this->markTestSkipped('Synthetiq sample configs not available.');
         }
 
@@ -32,7 +33,7 @@ final class SynthetiqBootstrapTest extends TestCase
     public function testMinimalConfigProducesResponse(): void
     {
         $vendorPath = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'bluefission' . DIRECTORY_SEPARATOR . 'synthetiq' . DIRECTORY_SEPARATOR . 'sample_configs';
-        if (!is_dir($vendorPath)) {
+        if (!DirectoryManager::pathExists($vendorPath)) {
             $this->markTestSkipped('Synthetiq sample configs not available.');
         }
 
@@ -69,7 +70,7 @@ final class SynthetiqBootstrapTest extends TestCase
     public function testBootstrapAppliesCustomRoutesAndKeywords(): void
     {
         $vendorPath = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'bluefission' . DIRECTORY_SEPARATOR . 'synthetiq' . DIRECTORY_SEPARATOR . 'sample_configs';
-        if (!is_dir($vendorPath)) {
+        if (!DirectoryManager::pathExists($vendorPath)) {
             $this->markTestSkipped('Synthetiq sample configs not available.');
         }
 

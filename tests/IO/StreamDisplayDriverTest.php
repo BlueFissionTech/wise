@@ -3,6 +3,7 @@
 namespace BlueFission\Tests\IO;
 
 use BlueFission\Wise\Sys\Drivers\StreamDisplayDriver;
+use BlueFission\Wise\Sys\FileSystemManager;
 use PHPUnit\Framework\TestCase;
 
 final class StreamDisplayDriverTest extends TestCase
@@ -16,7 +17,7 @@ final class StreamDisplayDriverTest extends TestCase
         $driver->print();
         $driver->send("second\n");
 
-        $contents = file_get_contents($path);
+        $contents = FileSystemManager::readPath($path);
 
         $this->assertStringContainsString("first\n", $contents);
         $this->assertStringContainsString("second\n", $contents);
