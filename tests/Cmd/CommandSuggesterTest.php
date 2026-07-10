@@ -12,8 +12,8 @@ final class CommandSuggesterTest extends TestCase
         $suggester = new CommandSuggester();
         $hint = $suggester->hint('');
 
+        $this->assertStringContainsString('tab:', $hint);
         $this->assertStringContainsString('list all resources', $hint);
-        $this->assertStringContainsString('help', $hint);
     }
 
     public function testSuggestsVerbForPartialInput(): void
@@ -29,6 +29,20 @@ final class CommandSuggesterTest extends TestCase
         $suggester = new CommandSuggester();
         $hint = $suggester->hint('list');
 
-        $this->assertStringContainsString('list', $hint);
+        $this->assertStringContainsString('list all resources', $hint);
+    }
+
+    public function testCompletesPartialVerb(): void
+    {
+        $suggester = new CommandSuggester();
+
+        $this->assertSame('list ', $suggester->complete('lis'));
+    }
+
+    public function testCompletesListToResourceDiscovery(): void
+    {
+        $suggester = new CommandSuggester();
+
+        $this->assertSame('list all resources', $suggester->complete('list'));
     }
 }

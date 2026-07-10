@@ -3,7 +3,7 @@
 namespace BlueFission\Wise\Cli\Components\Traits;
 
 trait Glitches {
-	protected function glitch($data, $args = null)
+	protected function glitch($data, $args = null): string
     {
         $lines = explode(PHP_EOL, $data);
         $colors = ['red' => 31, 'green' => 32, 'yellow' => 33, 'blue' => 34, 'magenta' => 35, 'cyan' => 36, 'white' => 37];
@@ -63,6 +63,9 @@ trait Glitches {
             }
         }
 
-        $this->_content->val(implode(PHP_EOL, $lines));
+        $content = implode(PHP_EOL, $lines);
+        $this->_content->val($content);
+
+        return $content;
     }
 }

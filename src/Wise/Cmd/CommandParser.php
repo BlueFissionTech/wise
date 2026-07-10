@@ -2,6 +2,7 @@
 namespace BlueFission\Wise\Cmd;
 
 use BlueFission\Services\Application as App;
+use BlueFission\Arr;
 use BlueFission\Str;
 
 // CommandParser.php
@@ -136,9 +137,31 @@ class CommandParser
         $firstWord = strtolower($words[0]);
 
         if (array_key_exists($firstWord, $this->questionKeywords)) {
-            $service = $this->questionKeywords[$firstWord];
-            $behavior = 'search';
-            $args = array_slice($words, 1);
+            $resource = null;
+            foreach ($words as $word) {
+                $normalized = $this->normalizeResource($word);
+                if ($normalized && $this->isResource($normalized)) {
+                    $resource = $normalized;
+                    break;
+                }
+            }
+
+            $service = $resource ?? $this->questionKeywords[$firstWord];
+            $behavior = $resource === 'weather' ? 'get' : 'search';
+            $ignored = Arr::merge(
+                $this->noiseWords,
+                $this->prepositions,
+                [$firstWord, 'is', 'are', 'do', 'does', 'current', 'today']
+            );
+            $args = [];
+            foreach ($words as $word) {
+                $normalized = $this->normalizeResource($word);
+                $lower = strtolower(trim($word, " \t\n\r\0\x0B,.!?;"));
+                if ($normalized === $service || in_array($lower, $ignored, true)) {
+                    continue;
+                }
+                $args[] = trim($word, " \t\n\r\0\x0B,.!?;");
+            }
 
             $command = new Command();
 

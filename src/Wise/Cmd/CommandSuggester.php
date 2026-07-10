@@ -24,7 +24,7 @@ class CommandSuggester
         $this->refresh();
 
         if ($input === '') {
-            return 'try: list all resources | help';
+            return 'tab: list all resources';
         }
 
         $command = $this->parser->parse($input);
@@ -34,7 +34,7 @@ class CommandSuggester
         if (!$command->verb && $lastToken !== '') {
             $verb = $this->bestMatch($lastToken, $this->verbs);
             if ($verb) {
-                return "suggest: {$verb} <resource>";
+                return "tab: {$verb} <resource>";
             }
         }
 
@@ -42,10 +42,10 @@ class CommandSuggester
             $resourceHints = $this->suggestResources($lastToken, 3);
             if ($resourceHints !== []) {
                 $suggestions = array_map(fn($resource) => "{$command->verb} {$resource}", $resourceHints);
-                return 'suggest: ' . implode(' | ', $suggestions);
+                return 'tab: ' . implode(' | ', $suggestions);
             }
 
-            return "suggest: {$command->verb} <resource>";
+            return "tab: {$command->verb} <resource>";
         }
 
         if (!$command->verb && !empty($command->resources)) {
@@ -54,16 +54,54 @@ class CommandSuggester
             if ($verbs !== []) {
                 $verbs = array_slice($verbs, 0, 3);
                 $suggestions = array_map(fn($verb) => "{$verb} {$resource}", $verbs);
-                return 'suggest: ' . implode(' | ', $suggestions);
+                return 'tab: ' . implode(' | ', $suggestions);
             }
         }
 
         $matches = $this->rankMatches($input, $this->commands, 3, 0.6);
         if ($matches !== []) {
-            return 'suggest: ' . implode(' | ', $matches);
+            return 'tab: ' . implode(' | ', $matches);
         }
 
         return '';
+    }
+
+    public function complete(string $input): ?string
+    {
+        $input = trim($input);
+        $this->refresh();
+
+        if ($input === '') {
+            return 'list all resources';
+        }
+
+        $command = $this->parser->parse($input);
+        $tokens = preg_split('/\s+/', $input);
+        $lastToken = strtolower((string)($tokens[count($tokens) - 1] ?? ''));
+
+        if (!$command->verb && $lastToken !== '') {
+            $verb = $this->bestMatch($lastToken, $this->verbs);
+            return $verb ? "{$verb} " : null;
+        }
+
+        if ($command->verb && empty($command->resources)) {
+            $resourceHints = $this->suggestResources($lastToken, 1);
+            if ($resourceHints !== []) {
+                return trim("{$command->verb} {$resourceHints[0]}");
+            }
+        }
+
+        if (!$command->verb && !empty($command->resources)) {
+            $resource = (string)$command->resources[0];
+            $verbs = $this->verbsForResource($resource);
+            if ($verbs !== []) {
+                return trim("{$verbs[0]} {$resource}");
+            }
+        }
+
+        $matches = $this->rankMatches($input, $this->commands, 1, 0.6);
+
+        return $matches[0] ?? null;
     }
 
     private function refresh(): void
@@ -100,6 +138,10 @@ class CommandSuggester
             return [];
         }
 
+        if ($token === 'list') {
+            return array_slice(['all resources', 'all commands', 'todo'], 0, $limit);
+        }
+
         if ($token === '' || in_array($token, $this->verbs, true)) {
             return array_slice($this->resources, 0, $limit);
         }
@@ -133,6 +175,10 @@ class CommandSuggester
         foreach ($candidates as $candidate) {
             $candidate = (string)$candidate;
             if ($candidate === '') {
+                continue;
+            }
+            if (str_starts_with(strtolower($candidate), $input)) {
+                $ranked[$candidate] = max($ranked[$candidate] ?? 0, 1.0);
                 continue;
             }
             similar_text($input, strtolower($candidate), $percent);

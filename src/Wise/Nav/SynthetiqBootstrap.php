@@ -10,6 +10,7 @@ use BlueFission\Automata\Language\{Interpreter, Grammar, StemmerLemmatizer, Walk
 use BlueFission\Automata\Analysis\KeywordTopicAnalyzer;
 use BlueFission\Automata\Strategy\NaiveBayesTextClassification;
 use BlueFission\Automata\Context;
+use BlueFission\Arr;
 use BlueFission\Str;
 use BlueFission\Wise\Sys\DirectoryManager;
 use BlueFission\Wise\Sys\FileSystemManager;
@@ -42,6 +43,8 @@ class SynthetiqBootstrap
         $grammar = require $configPath . DIRECTORY_SEPARATOR . 'grammar.php';
         $tokens = require $configPath . DIRECTORY_SEPARATOR . 'tokens.php';
         $documenter = require $configPath . DIRECTORY_SEPARATOR . 'documenter.php';
+        $dialogue = Arr::merge($dialogue, WiseSynthetiqSamples::dialogue());
+        $intentBoosts = Arr::merge($intentBoosts, WiseSynthetiqSamples::intentBoosts());
 
         return self::fromConfig([
             'dialogue' => $dialogue,

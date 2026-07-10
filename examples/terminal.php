@@ -62,6 +62,16 @@ $sessionDirectory = new FileSystem(['root' => $rootPath, 'filter' => []]);
 if (!$sessionDirectory->exists($sessionLocation)) {
     $sessionDirectory->mkdir('artifacts');
 }
+$storageLocation = $sessionLocation . DIRECTORY_SEPARATOR . 'storage';
+if (!$sessionDirectory->exists($storageLocation)) {
+    $sessionDirectory->mkdir('artifacts' . DIRECTORY_SEPARATOR . 'storage');
+}
+if (getenv('STORAGE_PATH') === false) {
+    putenv('STORAGE_PATH=' . $storageLocation);
+}
+if (getenv('STORAGE_FILE_NAME') === false) {
+    putenv('STORAGE_FILE_NAME=wise_cli_storage.json');
+}
 
 // ini_set('display_errors', 1);
 // ini_set('display_startup_errors', 1);
@@ -193,10 +203,10 @@ if (!$batchMode && $displayMode === 'dynamic' && !Tty::isTty(STDOUT)) {
 }
 if (PHP_OS === 'WINNT' && !$batchMode && $displayMode === 'dynamic') {
     if (getenv('WISE_STDIN_PROXY') === false) {
-        putenv('WISE_STDIN_PROXY=1');
+        putenv('WISE_STDIN_PROXY=0');
     }
     if (getenv('WISE_STDIN_BLOCKING') === false) {
-        putenv('WISE_STDIN_BLOCKING=1');
+        putenv('WISE_STDIN_BLOCKING=0');
     }
 }
 if (PHP_OS === 'Linux' && !$batchMode && getenv('WISE_STDIN_BLOCKING') === false && $displayMode === 'dynamic') {
@@ -301,6 +311,9 @@ if (!$batchMode) {
         $repl->suspendInput();
     }
     $console->addComponent($screen);
+    if ($dynamicDisplay) {
+        $console->clear();
+    }
     $console->display();
 }
 
@@ -483,4 +496,4 @@ if ($batchMode) {
 }
 
 // Handle a request
-$kernel->run();
+$kernel->run(false);

@@ -181,7 +181,7 @@ class CommandHandler {
     }
 
     public function exit() {
-        exit;
+        return 'Goodbye.';
     }
 
     // Add more internal commands as needed
@@ -226,7 +226,7 @@ class CommandHandler {
     {
         foreach ($args as $arg) {
             $value = strtolower((string)$arg);
-            if ($value === 'resource' || $value === 'resources') {
+            if ($value === 'all' || $value === 'resource' || $value === 'resources') {
                 return true;
             }
         }

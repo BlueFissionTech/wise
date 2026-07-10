@@ -60,6 +60,33 @@ final class ReplKeyInputTest extends TestCase
         $this->assertNotSame('', $repl->hintValue());
     }
 
+    public function testTabCompletesPromptBuffer(): void
+    {
+        $input = new SequenceInputSource(['lis', "\t"]);
+        $console = $this->makeConsole($input);
+        $repl = new REPL();
+        $console->addComponent($repl);
+
+        $console->listen();
+        $console->listen();
+
+        $this->assertSame('list ', $repl->inputValue());
+    }
+
+    public function testTabWithLongPromptDoesNotTriggerStringOffsetWarnings(): void
+    {
+        $content = str_repeat('x', 180);
+        $input = new SequenceInputSource([$content, "\t"]);
+        $console = $this->makeConsole($input);
+        $repl = new REPL();
+        $console->addComponent($repl);
+
+        $console->listen();
+        $console->listen();
+
+        $this->assertSame($content, $repl->inputValue());
+    }
+
     private function makeConsole(IInputSource $input): Console
     {
         $keyInput = new KeyInputManager($input, true);

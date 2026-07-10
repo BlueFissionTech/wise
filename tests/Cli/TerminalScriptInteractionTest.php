@@ -18,6 +18,13 @@ final class TerminalScriptInteractionTest extends TestCase
     protected function tearDown(): void
     {
         $this->removeDir($this->tempDir);
+        $defaultStorage = $this->projectRoot()
+            . DIRECTORY_SEPARATOR . 'artifacts'
+            . DIRECTORY_SEPARATOR . 'storage'
+            . DIRECTORY_SEPARATOR . 'wise_cli_storage.json';
+        if (DirectoryManager::pathExists($defaultStorage)) {
+            @unlink($defaultStorage);
+        }
     }
 
     public function testBatchCliProcessesInputFileAndPrintsDeterministicOutput(): void
@@ -39,11 +46,28 @@ final class TerminalScriptInteractionTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('/\x1b\[[0-9;?]*[A-Za-z]/', $result['stdout']);
     }
 
+    public function testBatchCliUsesWiseStorageDefaultsForResourceHelper(): void
+    {
+        $inputFile = $this->tempDir . DIRECTORY_SEPARATOR . 'commands.txt';
+        file_put_contents($inputFile, "list all\nexit\n");
+
+        $result = $this->runCli([
+            '--input-file', $inputFile,
+            '--display-mode', 'static',
+            '--output-mode', 'console',
+            '--input-exit',
+        ], false);
+
+        $this->assertSame(0, $result['exitCode'], $result['stderr']);
+        $this->assertSame('', $result['stderr']);
+        $this->assertStringContainsString('List of available resources:', $result['stdout']);
+    }
+
     /**
      * @param array<int, string> $args
      * @return array{exitCode:int, stdout:string, stderr:string}
      */
-    private function runCli(array $args): array
+    private function runCli(array $args, bool $injectStorageEnv = true): array
     {
         $cmd = array_merge([PHP_BINARY, $this->projectRoot() . DIRECTORY_SEPARATOR . 'terminal.php'], $args);
         $command = implode(' ', array_map('escapeshellarg', $cmd));
@@ -58,8 +82,12 @@ final class TerminalScriptInteractionTest extends TestCase
         $env['WISE_DISPLAY_MODE'] = 'static';
         $env['WISE_INPUT_EXIT'] = '1';
         $env['WISE_TTY_ECHO'] = '0';
-        $env['STORAGE_PATH'] = $this->tempDir;
-        $env['STORAGE_FILE_NAME'] = 'wise_cli_test_storage.json';
+        if ($injectStorageEnv) {
+            $env['STORAGE_PATH'] = $this->tempDir;
+            $env['STORAGE_FILE_NAME'] = 'wise_cli_test_storage.json';
+        } else {
+            unset($env['STORAGE_PATH'], $env['STORAGE_FILE_NAME']);
+        }
         $env['CLI_SESSION_ID'] = 'wise-cli-test';
 
         $process = proc_open($command, $descriptors, $pipes, $this->projectRoot(), $env);

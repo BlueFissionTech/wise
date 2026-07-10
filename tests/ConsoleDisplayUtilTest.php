@@ -46,4 +46,23 @@ final class ConsoleDisplayUtilTest extends TestCase
         $this->assertSame('hello', $parsed['content']);
         $this->assertArrayHasKey(0, $parsed['ansiCodes']);
     }
+
+    public function testWrapAnsiDoesNotSplitEscapeSequences(): void
+    {
+        $input = str_repeat('x', 79) . "\033[0m" . 'y';
+        $lines = ConsoleDisplayUtil::wrapAnsi($input, 80);
+
+        foreach ($lines as $line) {
+            $this->assertDoesNotMatchRegularExpression('/(?<!\x1b)\[[0-9;]*m/', $line);
+        }
+    }
+
+    public function testFitLinePreservesCompleteAnsiSequences(): void
+    {
+        $input = "\033[90m" . str_repeat('x', 90) . "\033[0m";
+        $line = ConsoleDisplayUtil::fitLine($input, 80);
+
+        $this->assertDoesNotMatchRegularExpression('/(?<!\x1b)\[[0-9;]*m/', $line);
+        $this->assertSame(80, mb_strlen(ConsoleDisplayUtil::parseAnsiCodes($line)['content']));
+    }
 }

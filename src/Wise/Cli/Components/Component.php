@@ -94,7 +94,7 @@ class Component implements IDrawable
 
     public function draw(): array
     {
-        $lines = explode(PHP_EOL, wordwrap($this->getContent(), $this->getWidth(), PHP_EOL, true));
+        $lines = ConsoleDisplayUtil::wrapAnsi($this->getContent(), $this->getWidth(), $this->getHeight());
         $lines = array_slice($lines, 0, $this->getHeight());
         $this->_children->sort(fn($a, $b) => $a->getZIndex() <=> $b->getZIndex());
 
@@ -188,6 +188,17 @@ class Component implements IDrawable
         }
 
         return $this->_needsRedraw;
+    }
+
+    public function requestRedraw(): void
+    {
+        $this->_needsRedraw = true;
+
+        foreach ($this->_children as $child) {
+            if (method_exists($child, 'requestRedraw')) {
+                $child->requestRedraw();
+            }
+        }
     }
 
     public function setParent(IDrawable $parent = null): void

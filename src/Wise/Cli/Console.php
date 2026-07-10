@@ -7,6 +7,7 @@ use BlueFission\Wise\Sys\{
     KeyInputManager,
 };
 use BlueFission\Wise\Cli\Components\{IDrawable, Component, Cursor, Prompt};
+use BlueFission\Wise\Cmd\CommandSuggester;
 use BlueFission\Wise\Sys\Utl\ConsoleDisplayUtil;
 use BlueFission\Behavioral\{Behaves, IDispatcher, IBehavioral};
 use BlueFission\Behavioral\Behaviors\{Event, Action, State, Meta};
@@ -36,6 +37,7 @@ class Console implements IDispatcher, IBehavioral
 
     protected ?Cursor $_activeCursor = null;
     protected ?Prompt $_activePrompt = null;
+    protected ?CommandSuggester $_commandSuggester = null;
 
     public function __construct(DisplayManager $displayManager, KeyInputManager $keyInputManager)
     {
@@ -341,30 +343,39 @@ class Console implements IDispatcher, IBehavioral
             $this->_buffer = '';
         }
 
-        if ( Str::pos($input, $this->_specialChars->flip()->get('BACKSPACE')) === 0 ) {
+        if ( $this->inputStartsWith($input, $this->_specialChars->flip()->get('BACKSPACE')) ) {
             // Handle backspace
-            $this->_buffer = Str::sub($this->_buffer, 0, -1);
+            $this->_buffer = substr($this->_buffer, 0, -1);
             $this->trigger(Event::RECEIVED, new Meta(data: new Data( channel: 'stdio', content: $this->_buffer)));
             return;
         }
 
-        if ( Str::pos($input, $this->_specialChars->flip()->get('UP')) === 0 ) {
+        if ( $this->inputStartsWith($input, $this->_specialChars->flip()->get('TAB')) ) {
+            $completion = $this->commandSuggester()->complete($this->_buffer);
+            if ($completion && $completion !== $this->_buffer) {
+                $this->_buffer = $completion;
+                $this->trigger(Event::RECEIVED, new Meta(data: new Data( channel: 'stdio', content: $this->_buffer)));
+            }
+            return;
+        }
+
+        if ( $this->inputStartsWith($input, $this->_specialChars->flip()->get('UP')) ) {
             // Handle up arrow
             return;
         }
 
-        if ( Str::pos($input, $this->_specialChars->flip()->get('DOWN')) === 0 ) {
+        if ( $this->inputStartsWith($input, $this->_specialChars->flip()->get('DOWN')) ) {
             // Handle down arrow
             return;
         }
 
-        if ( Str::pos($input, $this->_specialChars->flip()->get('RIGHT')) === 0 ) {
+        if ( $this->inputStartsWith($input, $this->_specialChars->flip()->get('RIGHT')) ) {
             // Handle right arrow by moving the cursor
             $this->send("\033[1C");
             return;
         }
 
-        if ( Str::pos($input, $this->_specialChars->flip()->get('LEFT')) === 0 ) {
+        if ( $this->inputStartsWith($input, $this->_specialChars->flip()->get('LEFT')) ) {
             // Handle left arrow by moving the cursor
             $this->send("\033[1D");
             return;
@@ -390,13 +401,44 @@ class Console implements IDispatcher, IBehavioral
     public function clear() {
         $this->_content = [];
         $this->_displayManager->clear();
+        $this->_displayManager->print();
+        $this->requestRedraw();
     }
 
     public function clearScreen() {
         $this->_displayManager->clearScreen();
+        $this->_displayManager->print();
+        $this->requestRedraw();
     }
 
     public function getDisplaySize() {
         return $this->_displayManager->getSize();
+    }
+
+    private function requestRedraw(): void
+    {
+        foreach ($this->_components as $component) {
+            if (method_exists($component, 'requestRedraw')) {
+                $component->requestRedraw();
+            }
+        }
+    }
+
+    private function commandSuggester(): CommandSuggester
+    {
+        if (!$this->_commandSuggester) {
+            $this->_commandSuggester = new CommandSuggester();
+        }
+
+        return $this->_commandSuggester;
+    }
+
+    private function inputStartsWith(string $input, ?string $prefix): bool
+    {
+        if ($prefix === null || $prefix === '') {
+            return false;
+        }
+
+        return strncmp($input, $prefix, strlen($prefix)) === 0;
     }
 }

@@ -19,7 +19,10 @@ class SplashScreen extends Component
     public function __construct(int $x = 0, int $y = 0, int $width = 80, int $height = 12, int $zIndex = 0)
     {
         parent::__construct($x, $y, $width, $height, '', $zIndex);
-        $this->_glitchEnabled = filter_var(getenv('WISE_SPLASH_GLITCH') ?: '0', FILTER_VALIDATE_BOOLEAN);
+        $glitch = getenv('WISE_SPLASH_GLITCH');
+        $this->_glitchEnabled = $glitch === false
+            ? PHP_OS !== 'WINNT'
+            : filter_var($glitch, FILTER_VALIDATE_BOOLEAN);
         $this->splashData();
         $this->splash();
     }
@@ -80,7 +83,7 @@ class SplashScreen extends Component
             $glitchInterval = random_int(3, 7);
             if (self::$_lastGlitch == 0 || (time() - self::$_lastGlitch) > $glitchInterval) {
                 $effect = $effects[array_rand($effects)];
-                $this->glitch($this->_splashData, [$effect => true]);
+                $content = $this->glitch($this->_splashData, [$effect => true]);
                 self::$_lastGlitch = time();
             } else {
                 $splash = preg_split("/\r?\n/", $this->_splashData);
