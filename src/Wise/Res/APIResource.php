@@ -4,6 +4,7 @@ namespace BlueFission\Wise\Res;
 use BlueFission\Wise\Res\BaseResource;
 use BlueFission\SimpleClients\OpenAIClient;
 use BlueFission\Data\Storage\Disk;
+use BlueFission\Wise\Sys\DirectoryManager;
 use \BlueFission\Connections\Curl;
 
 class APIResource extends BaseResource
@@ -21,9 +22,7 @@ class APIResource extends BaseResource
         parent::__construct();
 
         $storagePath = OPUS_ROOT . '/storage/system';
-        if (!is_dir($storagePath)) {
-            mkdir($storagePath, 0777, true);
-        }
+        DirectoryManager::ensurePath($storagePath);
         $this->_storage = new Disk([
             'location' => $storagePath,
             'name' => "{$this->_location}.json",

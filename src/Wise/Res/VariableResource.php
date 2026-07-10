@@ -3,6 +3,7 @@ namespace BlueFission\Wise\Res;
 
 use BlueFission\Wise\Res\BaseResource;
 use BlueFission\Data\Storage\Disk;
+use BlueFission\Wise\Sys\DirectoryManager;
 
 class VariableResource extends BaseResource
 {
@@ -16,11 +17,9 @@ class VariableResource extends BaseResource
     {
         $this->_key = null;
         parent::__construct();
-        
+
         $storagePath = OPUS_ROOT . '/storage/system';
-        if (!is_dir($storagePath)) {
-            mkdir($storagePath, 0777, true);
-        }
+        DirectoryManager::ensurePath($storagePath);
         $this->_storage = new Disk([
             'location' => $storagePath,
             'name' => "{$this->_location}.json",

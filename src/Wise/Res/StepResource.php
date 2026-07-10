@@ -7,6 +7,7 @@ use BlueFission\Services\Service;
 use BlueFission\Data\Storage\Disk;
 use BlueFission\Behavioral\IDispatcher;
 use BlueFission\SimpleClients\OpenAIClient;
+use BlueFission\Wise\Sys\DirectoryManager;
 
 class StepResource extends Service {
 
@@ -17,9 +18,7 @@ class StepResource extends Service {
         parent::__construct();
 
         $storagePath = OPUS_ROOT . '/storage/system';
-        if (!is_dir($storagePath)) {
-            mkdir($storagePath, 0777, true);
-        }
+        DirectoryManager::ensurePath($storagePath);
         $this->_storage = new Disk([
             'location' => $storagePath,
             'name' => 'steps_data.json',
@@ -34,11 +33,12 @@ class StepResource extends Service {
 
     public function perform( ): IDispatcher
     {
-        $args = func_get_args();
-        $behavior = array_shift( $args );
+        $args = Arr::make(func_get_args());
+        $behavior = $args->shift();
+        $args = $args->toArray(true);
 
         if ( Arr::is($behavior) ) {
-            $behavior = array_shift($behavior);
+            $behavior = Arr::make($behavior)->shift();
         }
 
         $response = "";
