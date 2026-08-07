@@ -139,6 +139,10 @@ class WorkingMemoryCoordinator
             }
         }
 
-        return new MemoryPartition($this->_reader);
+        try {
+            return new MemoryPartition($this->_reader);
+        } catch (\Throwable $e) {
+            return new ArrayMemoryWorkspace($this->_reader);
+        }
     }
 }

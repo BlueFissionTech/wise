@@ -2,9 +2,7 @@
 
 namespace BlueFission\Wise\Sys\Memory;
 
-use BlueFission\Automata\Comprehension\Holoscene;
 use BlueFission\Automata\Context;
-use BlueFission\Automata\Memory\Abs2Memory;
 
 interface IMemoryWorkspace
 {
@@ -12,9 +10,9 @@ interface IMemoryWorkspace
 
     public function recordContext(Context $context, string $label, array $edges = []): void;
 
-    public function memory(): Abs2Memory;
+    public function memory(): object;
 
-    public function holoscene(): Holoscene;
+    public function holoscene(): object;
 
     public function setMaxSize(?int $maxSize): void;
 

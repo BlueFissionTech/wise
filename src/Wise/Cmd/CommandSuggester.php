@@ -114,7 +114,7 @@ class CommandSuggester
         }
 
         if (Str::isEmpty($token) || Arr::has($this->verbs, $token, true)) {
-            return Arr::make($this->resources)->slice(0, $limit);
+            return Arr::make($this->resources)->slice(0, $limit)->val();
         }
 
         return $this->rankMatches($token, $this->resources, $limit, 0.4);
@@ -158,6 +158,6 @@ class CommandSuggester
 
         arsort($ranked);
 
-        return Arr::make($ranked)->keys()->slice(0, $limit);
+        return Arr::make($ranked)->keys()->slice(0, $limit)->val();
     }
 }
