@@ -4,7 +4,9 @@ namespace BlueFission\Wise\Usr;
 
 use BlueFission\Wise\Arc\Kernel;
 use BlueFission\Services\Authenticator;
+use BlueFission\Arr;
 use BlueFission\Str;
+use BlueFission\Val;
 use BlueFission\Wise\Usr\Profile;
 
 class Identity {
@@ -72,10 +74,13 @@ class Identity {
 	public function profile(): Profile
 	{
 		$id = '';
-		if (isset($this->_authenticator->id) && $this->_authenticator->id !== '') {
-			$id = (string)$this->_authenticator->id;
-		} elseif (isset($this->_authenticator->username) && $this->_authenticator->username !== '') {
-			$id = (string)$this->_authenticator->username;
+		$authId = $this->_authenticator->id ?? null;
+		$authUsername = $this->_authenticator->username ?? null;
+
+		if (Val::is($authId) && Str::isNotEmpty((string)$authId)) {
+			$id = (string)$authId;
+		} elseif (Val::is($authUsername) && Str::isNotEmpty((string)$authUsername)) {
+			$id = (string)$authUsername;
 		}
 
 		if ($id === '') {
@@ -83,11 +88,12 @@ class Identity {
 		}
 
 		$roles = [];
-		if (isset($this->_authenticator->roles) && is_array($this->_authenticator->roles)) {
-			$roles = $this->_authenticator->roles;
+		$authRoles = $this->_authenticator->roles ?? null;
+		if (Val::is($authRoles) && Arr::is($authRoles)) {
+			$roles = $authRoles;
 		}
 
-		if (empty($roles)) {
+		if (Arr::isEmpty($roles)) {
 			$roles = [$this->isAuthenticated() ? 'user' : 'guest'];
 		}
 
@@ -137,10 +143,10 @@ class Identity {
 	}
 
 	private function usernameIsValid() {
-		return !empty($this->_username);
+		return Str::isNotEmpty($this->_username);
 	}
 
 	private function passwordIsValid() {
-		return !empty($this->_password);
+		return Str::isNotEmpty($this->_password);
 	}
 }

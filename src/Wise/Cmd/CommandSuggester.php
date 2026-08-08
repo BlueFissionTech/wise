@@ -58,7 +58,7 @@ class CommandSuggester
             $resource = (string)$command->resources[0];
             $verbs = $this->verbsForResource($resource);
             if ($verbs !== []) {
-                $verbs = Arr::make($verbs)->slice(0, 3);
+                $verbs = Arr::make($verbs)->slice(0, 3)->toArray();
                 $suggestions = Arr::make($verbs)
                     ->map(fn($verb) => "{$verb} {$resource}")
                     ->values()
@@ -114,7 +114,7 @@ class CommandSuggester
         }
 
         if (Str::isEmpty($token) || Arr::has($this->verbs, $token, true)) {
-            return Arr::make($this->resources)->slice(0, $limit)->val();
+            return Arr::make($this->resources)->slice(0, $limit)->toArray();
         }
 
         return $this->rankMatches($token, $this->resources, $limit, 0.4);
@@ -126,7 +126,7 @@ class CommandSuggester
             return $this->resourceCommands[$resource];
         }
 
-        return Arr::make($this->verbs)->slice(0, 5);
+        return Arr::make($this->verbs)->slice(0, 5)->toArray();
     }
 
     private function bestMatch(string $input, array $candidates): ?string
@@ -158,6 +158,6 @@ class CommandSuggester
 
         arsort($ranked);
 
-        return Arr::make($ranked)->keys()->slice(0, $limit)->val();
+        return Arr::make($ranked)->keys()->slice(0, $limit)->toArray();
     }
 }

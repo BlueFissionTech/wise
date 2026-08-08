@@ -2,6 +2,8 @@
 
 namespace BlueFission\Wise\Usr;
 
+use BlueFission\Arr;
+
 class Profile
 {
     protected string $_id;
@@ -25,6 +27,6 @@ class Profile
 
     public function hasRole(string $role): bool
     {
-        return in_array($role, $this->_roles, true);
+        return Arr::has($this->_roles, $role, true);
     }
 }

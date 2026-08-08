@@ -3,6 +3,8 @@
 namespace BlueFission\Wise\Cmd;
 
 use BlueFission\Arr;
+use BlueFission\Str;
+use BlueFission\Val;
 use BlueFission\Wise\Arc\Kernel;
 use BlueFission\Data\FileSystem;
 use BlueFission\Wise\Res\ResourceHelper;
@@ -25,7 +27,7 @@ class CommandHandler {
         if ($this->shouldDeferToResource($commandName, $command)) {
             return false;
         }
-        return isset($this->_aliases[$commandName]) || method_exists($this, $commandName);
+        return Val::is($this->_aliases[$commandName] ?? null) || method_exists($this, $commandName);
     }
 
     public function handle($command) {
@@ -35,7 +37,7 @@ class CommandHandler {
         $commandName = $parts->shift();
         $args = $parts->val();
 
-        if (isset($this->_aliases[$commandName])) {
+        if (Val::is($this->_aliases[$commandName] ?? null)) {
             $commandName = $this->_aliases[$commandName];
         }
 
@@ -145,8 +147,8 @@ class CommandHandler {
             return 'Working memory is not configured.';
         }
 
-        $scope = $scope ? strtolower($scope) : null;
-        $size = $size !== null ? strtolower((string)$size) : null;
+        $scope = Val::isNotEmpty($scope) ? Str::lower((string)$scope) : null;
+        $size = Val::is($size) ? Str::lower((string)$size) : null;
 
         if ($scope === null || $scope === 'status') {
             return $this->memoryStatus();
@@ -159,7 +161,7 @@ class CommandHandler {
             $scope = 'user';
         }
 
-        if (!in_array($scope, ['user', 'global'], true)) {
+        if (!Arr::has(['user', 'global'], $scope, true)) {
             return 'Usage: memory [user|global] [size|off]';
         }
 
@@ -225,7 +227,7 @@ class CommandHandler {
     private function isResourceCommand(array $args): bool
     {
         foreach ($args as $arg) {
-            $value = strtolower((string)$arg);
+            $value = Str::lower((string)$arg);
             if ($value === 'resource' || $value === 'resources') {
                 return true;
             }
@@ -236,14 +238,14 @@ class CommandHandler {
 
     private function shouldDeferToResource(string $commandName, string $command): bool
     {
-        $commandName = strtolower($commandName);
-        if (!in_array($commandName, ['list', 'show', 'help'], true)) {
+        $commandName = Str::lower($commandName);
+        if (!Arr::has(['list', 'show', 'help'], $commandName, true)) {
             return false;
         }
 
         $parts = preg_split('/\s+/', trim($command));
         foreach ($parts as $part) {
-            $part = strtolower($part);
+            $part = Str::lower($part);
             if ($part === 'resource' || $part === 'resources') {
                 return false;
             }
@@ -267,7 +269,7 @@ class CommandHandler {
     {
         $filtered = [];
         foreach ($args as $arg) {
-            $value = strtolower((string)$arg);
+            $value = Str::lower((string)$arg);
             if ($value === 'resource' || $value === 'resources' || $value === 'all') {
                 continue;
             }

@@ -6,6 +6,7 @@ use BlueFission\BlueCore\Business\Prompts\MakeNote;
 use BlueFission\SimpleClients\OpenAIClient;
 use BlueFission\Data\Storage\Disk;
 use BlueFission\Services\Service;
+use BlueFission\Wise\Sys\DirectoryManager;
 
 class NoteResource extends Service
 {
@@ -18,9 +19,7 @@ class NoteResource extends Service
         parent::__construct();
 
         $storagePath = OPUS_ROOT . '/storage/system';
-        if (!is_dir($storagePath)) {
-            mkdir($storagePath, 0777, true);
-        }
+        DirectoryManager::ensurePath($storagePath);
         $this->_storage = new Disk([
             'location' => $storagePath,
             'name' => 'note_data.json',

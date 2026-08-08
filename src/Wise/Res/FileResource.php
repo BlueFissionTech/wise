@@ -3,6 +3,7 @@ namespace BlueFission\Wise\Commands;
 
 use BlueFission\Services\Service;
 use BlueFission\Data\FileSystem;
+use BlueFission\Wise\Sys\DirectoryManager;
 
 class FileResource extends Service {
     private $_fileSystem;
@@ -71,9 +72,7 @@ class FileResource extends Service {
 
     private function createFilesDirectory() {
         $path = OPUS_ROOT . '/storage/files';
-        if (!file_exists($path)) {
-            mkdir($path, 0777, true);
-        }
+        DirectoryManager::ensurePath($path);
     }
 
     public function help() {
