@@ -18,6 +18,7 @@ final class SynthetiqBootstrapTest extends TestCase
         if (!DirectoryManager::pathExists($vendorPath)) {
             $this->markTestSkipped('Synthetiq sample configs not available.');
         }
+        $this->skipIfSynthetiqRuntimeUnavailable();
 
         $modelPath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wise-synthetiq-models';
 
@@ -36,6 +37,7 @@ final class SynthetiqBootstrapTest extends TestCase
         if (!DirectoryManager::pathExists($vendorPath)) {
             $this->markTestSkipped('Synthetiq sample configs not available.');
         }
+        $this->skipIfSynthetiqRuntimeUnavailable();
 
         $config = [
             'dialogue' => [
@@ -73,6 +75,7 @@ final class SynthetiqBootstrapTest extends TestCase
         if (!DirectoryManager::pathExists($vendorPath)) {
             $this->markTestSkipped('Synthetiq sample configs not available.');
         }
+        $this->skipIfSynthetiqRuntimeUnavailable();
 
         $config = [
             'dialogue' => require $vendorPath . DIRECTORY_SEPARATOR . 'dialogue.php',
@@ -97,5 +100,38 @@ final class SynthetiqBootstrapTest extends TestCase
 
         $this->assertIsString($response);
         $this->assertNotSame('', $response);
+    }
+
+    public function testBootstrapReportsUnavailablePartialRuntime(): void
+    {
+        if (class_exists('BlueFission\\Chronicler\\Storage\\Structures\\WeightedCollection')) {
+            $this->markTestSkipped('Synthetiq runtime is complete in this environment.');
+        }
+
+        $vendorPath = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'bluefission' . DIRECTORY_SEPARATOR . 'synthetiq' . DIRECTORY_SEPARATOR . 'sample_configs';
+        if (!DirectoryManager::pathExists($vendorPath)) {
+            $this->markTestSkipped('Synthetiq sample configs not available.');
+        }
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Synthetiq runtime is unavailable');
+
+        SynthetiqBootstrap::fromConfig([
+            'dialogue' => [
+                'wise.test.intent' => ['wise.test.intent', ['wise test response'], ['wise-intent']],
+            ],
+            'intent_boosts' => [],
+            'grammar' => require $vendorPath . DIRECTORY_SEPARATOR . 'grammar.php',
+            'tokens' => require $vendorPath . DIRECTORY_SEPARATOR . 'tokens.php',
+            'documenter' => require $vendorPath . DIRECTORY_SEPARATOR . 'documenter.php',
+            'model_path' => sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wise-synthetiq-models-unavailable',
+        ]);
+    }
+
+    private function skipIfSynthetiqRuntimeUnavailable(): void
+    {
+        if (!class_exists('BlueFission\\Chronicler\\Storage\\Structures\\WeightedCollection')) {
+            $this->markTestSkipped('Synthetiq runtime dependency graph is incomplete.');
+        }
     }
 }

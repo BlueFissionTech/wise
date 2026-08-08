@@ -93,7 +93,11 @@ class SynthetiqBootstrap
 
         self::emitProgress($progress, 'analyzer', 'Preparing intent analyzer...');
         $analyzer = new KeywordTopicAnalyzer(new NaiveBayesTextClassification, $modelDir);
-        $ai = new SynthetIQ($interpreter, $analyzer);
+        try {
+            $ai = new SynthetIQ($interpreter, $analyzer);
+        } catch (\Throwable $e) {
+            throw new \RuntimeException('Synthetiq runtime is unavailable: ' . $e->getMessage(), 0, $e);
+        }
         self::stabilizePredictors($ai);
 
         $memoryAdapter = $config['memory_adapter'] ?? null;
