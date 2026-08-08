@@ -4,6 +4,7 @@ namespace BlueFission\Wise\Res;
 
 use BlueFission\Data\Storage\Disk;
 use BlueFission\Services\Service;
+use BlueFission\Wise\Sys\DirectoryManager;
 use DateTime;
 
 class Schedule
@@ -30,9 +31,7 @@ class ScheduleResource extends Service
     {
         parent::__construct();
         $storagePath = OPUS_ROOT . '/storage/system';
-        if (!is_dir($storagePath)) {
-            mkdir($storagePath, 0777, true);
-        }
+        DirectoryManager::ensurePath($storagePath);
         $this->_storage = new Disk([
             'location' => $storagePath,
             'name' => 'schedule_data.json',

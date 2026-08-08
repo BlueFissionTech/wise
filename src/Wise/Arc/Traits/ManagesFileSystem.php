@@ -2,6 +2,9 @@
 
 namespace BlueFission\Wise\Arc\Traits;
 
+use BlueFission\Arr;
+use BlueFission\Val;
+
 trait ManagesFileSystem {
     public function deleteFile($file) {
         $this->_fileSystemManager->open($file);
@@ -29,18 +32,18 @@ trait ManagesFileSystem {
     }
 
     public function moveFile($destination, $file = null) {
-        if ($file) {
+        if (Val::isNotEmpty($file)) {
             $this->_fileSystemManager->open($file);
         }
-        $this->_fileSystemManager->move($new);
+        $this->_fileSystemManager->move($destination);
         return $this->_fileSystemManager->status();
     }
 
     public function copyFile($destination, $file = null) {
-        if ($file) {
+        if (Val::isNotEmpty($file)) {
             $this->_fileSystemManager->open($file);
         }
-        $this->_fileSystemManager->copy($new);
+        $this->_fileSystemManager->copy($destination);
         return $this->_fileSystemManager->status();
     }
 
@@ -56,22 +59,17 @@ trait ManagesFileSystem {
     }
 
     public function listDir($dir = null) {
-        if ($dir) {
+        if (Val::isNotEmpty($dir)) {
             $this->_fileSystemManager->open($dir);
         }
 
         $list = $this->_fileSystemManager->listDir();
 
-        if (! $list || ( is_array($list) && count($list) == 0 )) {
+        if (Val::isEmpty($list) || (Arr::is($list) && Arr::isEmpty($list))) {
             return $this->_fileSystemManager->status();
         }
 
-        $output = '';
-        foreach ($list as $item) {
-            $output .= $item . PHP_EOL;
-        }
-
-        return $output;
+        return Arr::make($list)->join(PHP_EOL)->val() . PHP_EOL;
     }
     
     public function currentDir() {
