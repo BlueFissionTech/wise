@@ -54,4 +54,16 @@ final class CommandParserTest extends TestCase
         $this->assertSame(['model'], $command->resources);
         $this->assertSame(['time'], $command->args);
     }
+
+    public function testProcessQuestionPrefersNamedResource(): void
+    {
+        $parser = new CommandParser();
+
+        $command = $parser->processQuestion('what is the weather?');
+
+        $this->assertNotNull($command);
+        $this->assertSame('get', $command->verb);
+        $this->assertSame(['weather'], $command->resources);
+        $this->assertSame([], $command->args);
+    }
 }

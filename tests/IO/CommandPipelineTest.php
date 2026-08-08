@@ -92,6 +92,17 @@ final class CommandPipelineTest extends TestCase
         $this->assertStringContainsString(DIRECTORY_SEPARATOR . 'cmd' . DIRECTORY_SEPARATOR . 'status.jss', $paths[1]);
     }
 
+    public function testExitRequestStopsKernelWithoutCommandDispatch(): void
+    {
+        $kernel = $this->makeKernel();
+        $kernel->markRunningForTest();
+
+        $kernel->handle('exit');
+
+        $this->assertSame('Goodbye.', $kernel->lastOutput());
+        $this->assertFalse($kernel->isRunning());
+    }
+
     private function makeKernel(): TestKernel
     {
         $processManager = new ProcessManager();
@@ -151,6 +162,11 @@ final class CommandPipelineTest extends TestCase
 
 final class TestKernel extends Kernel
 {
+    public function markRunningForTest(): void
+    {
+        $this->_running = true;
+    }
+
     public function lastOutput(): string
     {
         return (string)$this->_output;

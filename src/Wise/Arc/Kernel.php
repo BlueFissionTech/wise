@@ -50,6 +50,7 @@ class Kernel {
     protected $_queue;
     protected $_output;
     protected bool $_batchMode = false;
+    protected bool $_running = false;
 
     protected static $_instance = null;
 
@@ -134,6 +135,11 @@ class Kernel {
     {
         $request = trim($request);
         // this method shoud determine if a request should be handled by the shell interpreter, the command processor, or directly by the kernel's internal commands
+
+        if ($this->isExitRequest($request)) {
+            $this->shutdown();
+            return;
+        }
 
         $this->recordMemory($request);
 
@@ -317,8 +323,11 @@ class Kernel {
         $this->recordMemoryOutput((string)$output);
     }
 
-    public function run() {
-        $this->_console->clear();
+    public function run(bool $clear = true) {
+        if ($clear) {
+            $this->_console->clear();
+        }
+        $this->_running = true;
 
         // Register input channels
         $this->_console->registerInputChannel('stdio'); // Keyboard input
@@ -332,10 +341,12 @@ class Kernel {
             $this->_output = '';
         })->bindTo($this, $this));
 
-        while (true) {
+        while ($this->_running) {
             $this->repl(); // Read, Evaluate, Print, Loop
             usleep(50000); // Sleep for 0.05 seconds
         }
+
+        $this->_console->display();
     }
 
     public function repl() {
@@ -345,7 +356,20 @@ class Kernel {
     }
 
     public function shutdown() {
-        // Shutdown kernel components
+        $this->_running = false;
+        $this->_output = 'Goodbye.';
+    }
+
+    public function isRunning(): bool
+    {
+        return $this->_running;
+    }
+
+    private function isExitRequest(string $request): bool
+    {
+        $request = Str::lower(Str::trim($request));
+
+        return in_array($request, ['exit', 'quit'], true);
     }
 
     private function maybeLogin() {

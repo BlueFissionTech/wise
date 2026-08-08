@@ -15,6 +15,7 @@ final class CommandHandlerTest extends TestCase
 
         $this->assertTrue($handler->canHandle('list something'));
         $this->assertTrue($handler->canHandle('listDir'));
+        $this->assertTrue($handler->canHandle('list all resources'));
         $this->assertFalse($handler->canHandle('unknown'));
     }
 
@@ -29,6 +30,17 @@ final class CommandHandlerTest extends TestCase
         $this->assertSame(['listDir', 'docs'], $kernel->lastCall);
     }
 
+    public function testListAllUsesResourceHelperInsteadOfFilesystem(): void
+    {
+        $kernel = new FakeKernel();
+        $handler = new CommandHandler($kernel);
+
+        $result = $handler->handle('list all');
+
+        $this->assertStringContainsString('List of available resources:', $result);
+        $this->assertSame([], $kernel->lastCall);
+    }
+
     public function testHandleEchoReturnsMessage(): void
     {
         $handler = new CommandHandler(new FakeKernel());
@@ -36,6 +48,13 @@ final class CommandHandlerTest extends TestCase
         $result = $handler->handle('echo hello');
 
         $this->assertSame('hello', $result);
+    }
+
+    public function testExitReturnsMessageWithoutTerminatingProcess(): void
+    {
+        $handler = new CommandHandler(new FakeKernel());
+
+        $this->assertSame('Goodbye.', $handler->handle('exit'));
     }
 
     public function testClearScreenReturnsEscapeSequence(): void

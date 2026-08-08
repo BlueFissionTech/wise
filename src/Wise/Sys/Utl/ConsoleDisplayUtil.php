@@ -137,7 +137,7 @@ class ConsoleDisplayUtil {
 
     public static function updateBuffer($line, $content) {
         if ($line >= 0 && $line < count(self::$_newBuffer)) {
-            self::$_newBuffer[$line] = str_pad(mb_substr($content, 0, self::$screenWidth), self::$screenWidth);
+            self::$_newBuffer[$line] = self::fitLine($content, self::$screenWidth);
         }
     }
 
@@ -159,46 +159,18 @@ class ConsoleDisplayUtil {
                 // Move the cursor to the line that needs updating
                 echo "\033[" . ($i + 1) . ";1H";
 
-                $currentLine = self::$_currentBuffer[$i];
                 $newLine = self::$_newBuffer[$i];
-
                 $parsedNewLine = self::parseAnsiCodes($newLine);
-                $parsedCurrentLine = self::parseAnsiCodes($currentLine);
-
-                $length = max(mb_strlen($parsedNewLine['content']), mb_strlen($parsedCurrentLine['content']));
-
-                $lineBuffer = '';
-                $prevAnsiState = '';
-                $lineHasAnsi = false;
-
+                $visible = $parsedNewLine['content'];
+                $length = mb_strlen($visible);
                 for ($j = 0; $j < $length; $j++) {
-                    if ($j >= mb_strlen($parsedCurrentLine['content']) || $j >= mb_strlen($parsedNewLine['content']) || (mb_substr($parsedCurrentLine['content'], $j, 1) !== mb_substr($parsedNewLine['content'], $j, 1) || mb_substr($parsedNewLine['content'], $j, 1) == ' ')) {
-                        // If there's an ANSI code to apply, apply it
-                        if (isset($parsedNewLine['ansiCodes'][$j])) {
-                            $lineBuffer .= $parsedNewLine['ansiCodes'][$j];
-                            $prevAnsiState = $parsedNewLine['ansiCodes'][$j];
-                            $lineHasAnsi = true;
-                        } else {
-                            // Apply the previous line's ANSI state if no new code
-                            $lineBuffer .= $prevAnsiState;
-                        }
-
-                        // Append the character to the line buffer
-                        $lineBuffer .= mb_substr($parsedNewLine['content'], $j, 1) ?? ' ';
-                    } else {
-                        // Preserve the character if it's the same
-                        $lineBuffer .= mb_substr($parsedCurrentLine['content'], $j, 1);
-                    }
-
-                    // Update the cursor position
-                    if (mb_substr($parsedNewLine['content'], $j, 1) !== ' ') {
+                    if (mb_substr($visible, $j, 1) !== ' ') {
                         self::$_cursorPosition = [$j + 1, $i + 1];
                     }
                 }
 
                 // Clear the line first and then print the updated line from buffer
-                $suffix = $lineHasAnsi ? "\033[0m" : '';
-                echo "\033[2K" . $lineBuffer . $suffix;
+                echo "\033[2K" . $newLine . "\033[0m";
                 self::$_currentBuffer[$i] = self::$_newBuffer[$i];
             }
         }
@@ -209,7 +181,7 @@ class ConsoleDisplayUtil {
     }
 
     public static function parseAnsiCodes($line) {
-        $ansiCodePattern = '/\033\[[0-9;]*m/';
+        $ansiCodePattern = '/\033\[[0-9;?]*[A-Za-z]/';
         preg_match_all($ansiCodePattern, $line, $matches, PREG_OFFSET_CAPTURE);
 
         $offset = 0;
@@ -226,6 +198,78 @@ class ConsoleDisplayUtil {
         return $parsedLine;
     }
 
+    public static function fitLine(string $line, int $width): string
+    {
+        $width = max(0, $width);
+        if ($width === 0) {
+            return '';
+        }
+
+        $wrapped = self::wrapAnsi($line, $width, 1);
+        $output = $wrapped[0] ?? '';
+        $visibleLength = mb_strlen(self::parseAnsiCodes($output)['content']);
+
+        if ($visibleLength < $width) {
+            $output .= str_repeat(' ', $width - $visibleLength);
+        }
+
+        return $output;
+    }
+
+    public static function wrapAnsi(string $content, int $width, ?int $height = null): array
+    {
+        $width = max(1, $width);
+        $lines = [];
+        $logicalLines = preg_split('/\r\n|\r|\n/', $content);
+        if (!is_array($logicalLines)) {
+            $logicalLines = [$content];
+        }
+
+        foreach ($logicalLines as $logicalLine) {
+            foreach (self::wrapAnsiLine($logicalLine, $width) as $line) {
+                $lines[] = $line;
+                if ($height !== null && count($lines) >= $height) {
+                    return $lines;
+                }
+            }
+        }
+
+        return $lines !== [] ? $lines : [''];
+    }
+
+    private static function wrapAnsiLine(string $line, int $width): array
+    {
+        preg_match_all('/\033\[[0-9;?]*[A-Za-z]|./us', $line, $matches);
+        $tokens = $matches[0] ?? [];
+        if ($tokens === []) {
+            return [''];
+        }
+
+        $lines = [];
+        $output = '';
+        $visibleLength = 0;
+
+        foreach ($tokens as $token) {
+            if (preg_match('/^\033\[[0-9;?]*[A-Za-z]$/', $token)) {
+                $output .= $token;
+                continue;
+            }
+
+            if ($visibleLength >= $width) {
+                $lines[] = $output;
+                $output = '';
+                $visibleLength = 0;
+            }
+
+            $output .= $token;
+            $visibleLength++;
+        }
+
+        $lines[] = $output;
+
+        return $lines;
+    }
+
     public static function colorize($data, $color) {
 
         return self::display("\033[{$color}m{$data}\033[0m");
@@ -240,13 +284,10 @@ class ConsoleDisplayUtil {
     }
 
     public static function clear() {
-        if (strncasecmp(PHP_OS, 'WIN', 3) == 0) {
-            system('cls');
-        } else {
-            system('clear');
-        }
+        self::initializeBuffers(self::$_currentBuffer, self::$_newBuffer, self::$screenWidth ?? 80, self::$screenHeight ?? 24);
+        self::$_cursorPosition = [0, 0];
 
-        return self::display("\033[2J\033[1;1H");
+        return self::display("\033[2J\033[3J\033[H");
     }
 
     public static function clearLine() {
@@ -258,13 +299,7 @@ class ConsoleDisplayUtil {
     }
 
     public static function clearScreen() {
-        self::display("\033[H\033[J");
-
-        for ($i = 0; $i < self::$screenHeight; $i++) {
-            self::display("\r" . str_repeat(' ', self::$screenWidth) . "\r"); // Clear line
-        }
-
-        self::display("\033[H"); // Move cursor to the top left again
+        return self::clear();
     }
 
     public static function clearLineToEnd() {

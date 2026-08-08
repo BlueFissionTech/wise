@@ -27,17 +27,17 @@ class CommandSuggester
         $this->refresh();
 
         if (Str::isEmpty($input)) {
-            return 'try: list all resources | help';
+            return 'tab: list all resources';
         }
 
         $command = $this->parser->parse($input);
         $tokens = preg_split('/\s+/', $input);
-        $lastToken = Str::make((string)($tokens[Arr::count($tokens) - 1] ?? ''))->lower()->val();
+        $lastToken = Str::make((string)($tokens[Arr::size($tokens) - 1] ?? ''))->lower()->val();
 
         if (Str::isEmpty((string)$command->verb) && !Str::isEmpty($lastToken)) {
             $verb = $this->bestMatch($lastToken, $this->verbs);
-            if (Val::is($verb)) {
-                return "suggest: {$verb} <resource>";
+            if (Val::isNotEmpty($verb)) {
+                return "tab: {$verb} <resource>";
             }
         }
 
@@ -48,10 +48,10 @@ class CommandSuggester
                     ->map(fn($resource) => "{$command->verb} {$resource}")
                     ->values()
                     ->val();
-                return 'suggest: ' . implode(' | ', $suggestions);
+                return 'tab: ' . implode(' | ', $suggestions);
             }
 
-            return "suggest: {$command->verb} <resource>";
+            return "tab: {$command->verb} <resource>";
         }
 
         if (Str::isEmpty((string)$command->verb) && Arr::isNotEmpty($command->resources)) {
@@ -63,16 +63,54 @@ class CommandSuggester
                     ->map(fn($verb) => "{$verb} {$resource}")
                     ->values()
                     ->val();
-                return 'suggest: ' . implode(' | ', $suggestions);
+                return 'tab: ' . implode(' | ', $suggestions);
             }
         }
 
         $matches = $this->rankMatches($input, $this->commands, 3, 0.6);
         if ($matches !== []) {
-            return 'suggest: ' . implode(' | ', $matches);
+            return 'tab: ' . implode(' | ', $matches);
         }
 
         return '';
+    }
+
+    public function complete(string $input): ?string
+    {
+        $input = Str::make($input)->trim()->val();
+        $this->refresh();
+
+        if (Str::isEmpty($input)) {
+            return 'list all resources';
+        }
+
+        $command = $this->parser->parse($input);
+        $tokens = preg_split('/\s+/', $input);
+        $lastToken = Str::make((string)($tokens[Arr::size($tokens) - 1] ?? ''))->lower()->val();
+
+        if (Str::isEmpty((string)$command->verb) && !Str::isEmpty($lastToken)) {
+            $verb = $this->bestMatch($lastToken, $this->verbs);
+            return Val::isNotEmpty($verb) ? "{$verb} " : null;
+        }
+
+        if (!Str::isEmpty((string)$command->verb) && Arr::isEmpty($command->resources)) {
+            $resourceHints = $this->suggestResources($lastToken, 1);
+            if ($resourceHints !== []) {
+                return Str::make("{$command->verb} {$resourceHints[0]}")->trim()->val();
+            }
+        }
+
+        if (Str::isEmpty((string)$command->verb) && Arr::isNotEmpty($command->resources)) {
+            $resource = (string)$command->resources[0];
+            $verbs = $this->verbsForResource($resource);
+            if ($verbs !== []) {
+                return Str::make("{$verbs[0]} {$resource}")->trim()->val();
+            }
+        }
+
+        $matches = $this->rankMatches($input, $this->commands, 1, 0.6);
+
+        return $matches[0] ?? null;
     }
 
     private function refresh(): void
@@ -113,6 +151,10 @@ class CommandSuggester
             return [];
         }
 
+        if (Str::make($token)->match('list')) {
+            return Arr::make(['all resources', 'all commands', 'todo'])->slice(0, $limit)->toArray();
+        }
+
         if (Str::isEmpty($token) || Arr::has($this->verbs, $token, true)) {
             return Arr::make($this->resources)->slice(0, $limit)->toArray();
         }
@@ -148,7 +190,12 @@ class CommandSuggester
             if (Str::isEmpty($candidate)) {
                 continue;
             }
-            similar_text($input, Str::make($candidate)->lower()->val(), $percent);
+            $candidate = Str::make($candidate)->lower()->val();
+            if (Str::startsWith($candidate, $input)) {
+                $ranked[$candidate] = max($ranked[$candidate] ?? 0, 1.0);
+                continue;
+            }
+            similar_text($input, $candidate, $percent);
             $score = $percent / 100;
             if ($score < $minScore) {
                 continue;
