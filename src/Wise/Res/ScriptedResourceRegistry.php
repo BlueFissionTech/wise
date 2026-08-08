@@ -2,11 +2,14 @@
 
 namespace BlueFission\Wise\Res;
 
+use BlueFission\Arr;
 use BlueFission\Obj;
 use BlueFission\Services\Application as App;
 use BlueFission\Str;
+use BlueFission\Val;
 use BlueFission\Wise\Arc\Kernel;
 use BlueFission\Wise\Exe\BridgeRegistry;
+use BlueFission\Wise\Sys\DirectoryManager;
 
 class ScriptedResourceRegistry extends Obj
 {
@@ -29,18 +32,18 @@ class ScriptedResourceRegistry extends Obj
     public function register(): void
     {
         $resourcePath = $this->rootPath . DIRECTORY_SEPARATOR . $this->resourceDir;
-        if (!is_dir($resourcePath)) {
+        if (!DirectoryManager::pathExists($resourcePath)) {
             return;
         }
 
         $files = glob($resourcePath . DIRECTORY_SEPARATOR . '*.vibe');
-        if (!is_array($files)) {
+        if (!Arr::is($files)) {
             return;
         }
 
         foreach ($files as $file) {
             $name = pathinfo($file, PATHINFO_FILENAME);
-            if ($name === '' || isset($this->registered[$name])) {
+            if (Str::isEmpty($name) || Val::is($this->registered[$name] ?? null)) {
                 continue;
             }
 

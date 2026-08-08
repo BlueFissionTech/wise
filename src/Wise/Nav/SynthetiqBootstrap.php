@@ -73,9 +73,7 @@ class SynthetiqBootstrap
 
         $modelDir = $config['model_path'] ?? (dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'artifacts' . DIRECTORY_SEPARATOR . 'models' . DIRECTORY_SEPARATOR . 'synthetiq');
         $modelDir = rtrim($modelDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-        if (!DirectoryManager::pathExists($modelDir)) {
-            mkdir($modelDir, 0777, true);
-        }
+        DirectoryManager::ensurePath($modelDir);
 
         $modelFile = self::resolveModelPath($modelDir, KeywordTopicAnalyzer::class);
         if (FileSystemManager::pathExists($modelFile)) {

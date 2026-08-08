@@ -2,7 +2,10 @@
 
 namespace BlueFission\Wise\Cmd;
 
+use BlueFission\Arr;
 use BlueFission\Services\Application as App;
+use BlueFission\Str;
+use BlueFission\Val;
 
 class CommandSuggester
 {
@@ -20,40 +23,46 @@ class CommandSuggester
 
     public function hint(string $input): string
     {
-        $input = trim($input);
+        $input = Str::make($input)->trim()->val();
         $this->refresh();
 
-        if ($input === '') {
+        if (Str::isEmpty($input)) {
             return 'tab: list all resources';
         }
 
         $command = $this->parser->parse($input);
         $tokens = preg_split('/\s+/', $input);
-        $lastToken = strtolower((string)($tokens[count($tokens) - 1] ?? ''));
+        $lastToken = Str::make((string)($tokens[Arr::size($tokens) - 1] ?? ''))->lower()->val();
 
-        if (!$command->verb && $lastToken !== '') {
+        if (Str::isEmpty((string)$command->verb) && !Str::isEmpty($lastToken)) {
             $verb = $this->bestMatch($lastToken, $this->verbs);
-            if ($verb) {
+            if (Val::isNotEmpty($verb)) {
                 return "tab: {$verb} <resource>";
             }
         }
 
-        if ($command->verb && empty($command->resources)) {
+        if (!Str::isEmpty((string)$command->verb) && Arr::isEmpty($command->resources)) {
             $resourceHints = $this->suggestResources($lastToken, 3);
             if ($resourceHints !== []) {
-                $suggestions = array_map(fn($resource) => "{$command->verb} {$resource}", $resourceHints);
+                $suggestions = Arr::make($resourceHints)
+                    ->map(fn($resource) => "{$command->verb} {$resource}")
+                    ->values()
+                    ->val();
                 return 'tab: ' . implode(' | ', $suggestions);
             }
 
             return "tab: {$command->verb} <resource>";
         }
 
-        if (!$command->verb && !empty($command->resources)) {
+        if (Str::isEmpty((string)$command->verb) && Arr::isNotEmpty($command->resources)) {
             $resource = (string)$command->resources[0];
             $verbs = $this->verbsForResource($resource);
             if ($verbs !== []) {
-                $verbs = array_slice($verbs, 0, 3);
-                $suggestions = array_map(fn($verb) => "{$verb} {$resource}", $verbs);
+                $verbs = Arr::make($verbs)->slice(0, 3)->toArray();
+                $suggestions = Arr::make($verbs)
+                    ->map(fn($verb) => "{$verb} {$resource}")
+                    ->values()
+                    ->val();
                 return 'tab: ' . implode(' | ', $suggestions);
             }
         }
@@ -68,34 +77,34 @@ class CommandSuggester
 
     public function complete(string $input): ?string
     {
-        $input = trim($input);
+        $input = Str::make($input)->trim()->val();
         $this->refresh();
 
-        if ($input === '') {
+        if (Str::isEmpty($input)) {
             return 'list all resources';
         }
 
         $command = $this->parser->parse($input);
         $tokens = preg_split('/\s+/', $input);
-        $lastToken = strtolower((string)($tokens[count($tokens) - 1] ?? ''));
+        $lastToken = Str::make((string)($tokens[Arr::size($tokens) - 1] ?? ''))->lower()->val();
 
-        if (!$command->verb && $lastToken !== '') {
+        if (Str::isEmpty((string)$command->verb) && !Str::isEmpty($lastToken)) {
             $verb = $this->bestMatch($lastToken, $this->verbs);
-            return $verb ? "{$verb} " : null;
+            return Val::isNotEmpty($verb) ? "{$verb} " : null;
         }
 
-        if ($command->verb && empty($command->resources)) {
+        if (!Str::isEmpty((string)$command->verb) && Arr::isEmpty($command->resources)) {
             $resourceHints = $this->suggestResources($lastToken, 1);
             if ($resourceHints !== []) {
-                return trim("{$command->verb} {$resourceHints[0]}");
+                return Str::make("{$command->verb} {$resourceHints[0]}")->trim()->val();
             }
         }
 
-        if (!$command->verb && !empty($command->resources)) {
+        if (Str::isEmpty((string)$command->verb) && Arr::isNotEmpty($command->resources)) {
             $resource = (string)$command->resources[0];
             $verbs = $this->verbsForResource($resource);
             if ($verbs !== []) {
-                return trim("{$verbs[0]} {$resource}");
+                return Str::make("{$verbs[0]} {$resource}")->trim()->val();
             }
         }
 
@@ -114,12 +123,12 @@ class CommandSuggester
         $resourceCommands = [];
 
         foreach ($abilities as $resource => $verbs) {
-            if (!is_array($verbs)) {
+            if (!Arr::is($verbs)) {
                 continue;
             }
             foreach ($verbs as $verb) {
                 $verb = (string)$verb;
-                $commands[] = trim($verb . ' ' . $resource);
+                $commands[] = Str::make($verb . ' ' . $resource)->trim()->val();
                 $resourceCommands[$resource][] = $verb;
             }
         }
@@ -128,22 +137,26 @@ class CommandSuggester
         $commands[] = 'list all commands';
         $commands[] = 'help';
 
-        $this->commands = array_values(array_unique(array_filter($commands)));
+        $this->commands = Arr::make($commands)
+            ->filter(fn($command) => Val::is($command) && !Str::isEmpty((string)$command))
+            ->unique()
+            ->values()
+            ->val();
         $this->resourceCommands = $resourceCommands;
     }
 
     private function suggestResources(string $token, int $limit): array
     {
-        if ($this->resources === []) {
+        if (Arr::isEmpty($this->resources)) {
             return [];
         }
 
-        if ($token === 'list') {
-            return array_slice(['all resources', 'all commands', 'todo'], 0, $limit);
+        if (Str::make($token)->match('list')) {
+            return Arr::make(['all resources', 'all commands', 'todo'])->slice(0, $limit)->toArray();
         }
 
-        if ($token === '' || in_array($token, $this->verbs, true)) {
-            return array_slice($this->resources, 0, $limit);
+        if (Str::isEmpty($token) || Arr::has($this->verbs, $token, true)) {
+            return Arr::make($this->resources)->slice(0, $limit)->toArray();
         }
 
         return $this->rankMatches($token, $this->resources, $limit, 0.4);
@@ -151,11 +164,11 @@ class CommandSuggester
 
     private function verbsForResource(string $resource): array
     {
-        if (isset($this->resourceCommands[$resource])) {
+        if (Arr::hasKey($this->resourceCommands, $resource)) {
             return $this->resourceCommands[$resource];
         }
 
-        return array_slice($this->verbs, 0, 5);
+        return Arr::make($this->verbs)->slice(0, 5)->toArray();
     }
 
     private function bestMatch(string $input, array $candidates): ?string
@@ -170,18 +183,19 @@ class CommandSuggester
     private function rankMatches(string $input, array $candidates, int $limit, float $minScore): array
     {
         $ranked = [];
-        $input = strtolower($input);
+        $input = Str::make($input)->lower()->val();
 
         foreach ($candidates as $candidate) {
             $candidate = (string)$candidate;
-            if ($candidate === '') {
+            if (Str::isEmpty($candidate)) {
                 continue;
             }
-            if (str_starts_with(strtolower($candidate), $input)) {
+            $candidate = Str::make($candidate)->lower()->val();
+            if (Str::startsWith($candidate, $input)) {
                 $ranked[$candidate] = max($ranked[$candidate] ?? 0, 1.0);
                 continue;
             }
-            similar_text($input, strtolower($candidate), $percent);
+            similar_text($input, $candidate, $percent);
             $score = $percent / 100;
             if ($score < $minScore) {
                 continue;
@@ -191,6 +205,6 @@ class CommandSuggester
 
         arsort($ranked);
 
-        return array_slice(array_keys($ranked), 0, $limit);
+        return Arr::make($ranked)->keys()->slice(0, $limit)->toArray();
     }
 }

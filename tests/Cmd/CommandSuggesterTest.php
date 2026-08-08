@@ -24,6 +24,14 @@ final class CommandSuggesterTest extends TestCase
         $this->assertStringContainsString('list', $hint);
     }
 
+    public function testSuggestsVerbForTypoInput(): void
+    {
+        $suggester = new CommandSuggester();
+        $hint = $suggester->hint('hlep');
+
+        $this->assertStringContainsString('help', $hint);
+    }
+
     public function testSuggestsResourceForVerbOnly(): void
     {
         $suggester = new CommandSuggester();
