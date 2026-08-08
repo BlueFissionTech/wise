@@ -3,42 +3,38 @@
 namespace BlueFission\Wise\Sys\Memory;
 
 use BlueFission\Arr;
-use BlueFission\Automata\Comprehension\Holoscene;
 use BlueFission\Automata\Context;
-use BlueFission\Automata\Memory\Abs2Memory;
 use BlueFission\Num;
 use BlueFission\Str;
 use BlueFission\Val;
 
-class MemoryPartition implements IMemoryWorkspace
+class ArrayMemoryWorkspace implements IMemoryWorkspace
 {
     protected object $_reader;
-    protected object $_memory;
-    protected object $_holoscene;
+    protected ArrayMemoryGraph $_memory;
+    protected ArrayHoloscene $_holoscene;
     protected ?int $_maxSize = null;
     protected float $_decayRate = 3600.0;
 
-    public function __construct(object $reader, ?Abs2Memory $memory = null, ?Holoscene $holoscene = null)
+    public function __construct(object $reader, ?ArrayMemoryGraph $memory = null, ?ArrayHoloscene $holoscene = null)
     {
         if (!method_exists($reader, 'readDocument') || !method_exists($reader, 'toHoloscene')) {
             throw new \InvalidArgumentException('Reader must implement readDocument() and toHoloscene().');
         }
 
         $this->_reader = $reader;
-        $this->_memory = $memory ?? self::makeMemoryGraph();
-        $this->_holoscene = $holoscene ?? self::makeHoloscene();
+        $this->_memory = $memory ?? new ArrayMemoryGraph();
+        $this->_holoscene = $holoscene ?? new ArrayHoloscene();
     }
 
     public function record(string $text, string $episodeId): void
     {
         $statements = $this->_reader->readDocument($text);
-        if ($this->_memory instanceof ArrayMemoryGraph || $this->_holoscene instanceof ArrayHoloscene) {
+        try {
+            $this->_reader->toHoloscene($statements, $this->_holoscene, $this->_memory, $episodeId);
+        } catch (\Throwable $e) {
             $this->recordFallbackStatements($statements, $episodeId);
-            $this->applyRetention();
-            return;
         }
-
-        $this->_reader->toHoloscene($statements, $this->_holoscene, $this->_memory, $episodeId);
         $this->applyRetention();
     }
 
@@ -50,6 +46,7 @@ class MemoryPartition implements IMemoryWorkspace
             $timestamp = $now;
             $context->set('timestamp', $timestamp);
         }
+
         $lastSeen = (int)$context->get('last_seen', 0);
         if ($lastSeen <= 0) {
             $context->set('last_seen', $timestamp);
@@ -81,7 +78,9 @@ class MemoryPartition implements IMemoryWorkspace
 
     public function setDecayRate(float $seconds): void
     {
-        $this->_decayRate = $seconds > 0 ? $seconds : $this->_decayRate;
+        if ($seconds > 0) {
+            $this->_decayRate = $seconds;
+        }
     }
 
     protected function applyRetention(): void
@@ -111,9 +110,7 @@ class MemoryPartition implements IMemoryWorkspace
             $connections = Arr::count($node->getEdges());
             $ageSeconds = Num::make($now - $lastSeen)->max(0);
             $agePenalty = $ageSeconds / $this->_decayRate;
-            $score = $reinforcement + $connections - $agePenalty;
-
-            $scored[$label] = $score;
+            $scored[$label] = $reinforcement + $connections - $agePenalty;
         }
 
         arsort($scored);
@@ -126,25 +123,7 @@ class MemoryPartition implements IMemoryWorkspace
         }
     }
 
-    private static function makeMemoryGraph(): object
-    {
-        try {
-            return new Abs2Memory();
-        } catch (\Throwable $e) {
-            return new ArrayMemoryGraph();
-        }
-    }
-
-    private static function makeHoloscene(): object
-    {
-        try {
-            return new Holoscene();
-        } catch (\Throwable $e) {
-            return new ArrayHoloscene();
-        }
-    }
-
-    private function recordFallbackStatements(array $statements, string $episodeId): void
+    protected function recordFallbackStatements(array $statements, string $episodeId): void
     {
         foreach ($statements as $index => $statement) {
             $context = new Context();
