@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    env:
+      GH_REPO_TOKEN: ${{ secrets.BF_GITHUB_TOKEN != '' && secrets.BF_GITHUB_TOKEN || secrets.CI_GITHUB_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix:
+        php:
+          - '8.2'
+          - '8.3'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Sanitize GitHub authentication
+        run: |
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          git config --local --unset-all credential.helper || true
+          git config --global --unset-all http.https://github.com/.extraheader || true
+          git config --global --unset-all credential.helper || true
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate Composer manifest
+        run: composer validate --strict --no-check-lock
+
+      - name: Check private dependency access
+        run: |
+          if [ -z "${GH_REPO_TOKEN:-}" ]; then
+            echo "::error::Set BF_GITHUB_TOKEN or CI_GITHUB_TOKEN so Composer can install private dependencies."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: |
+          export COMPOSER_AUTH="{\"github-oauth\":{\"github.com\":\"${GH_REPO_TOKEN}\"}}"
+          composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Check platform requirements
+        run: composer check-platform-reqs
+
+      - name: Run test suite
+        run: vendor/bin/phpunit --do-not-cache-result
