@@ -103,6 +103,7 @@ final class TerminalScriptInteractionTest extends TestCase
         $stderr = '';
         $deadline = microtime(true) + 15;
         $timedOut = false;
+        $exitCode = -1;
 
         while (true) {
             $stdout .= stream_get_contents($pipes[1]) ?: '';
@@ -110,6 +111,7 @@ final class TerminalScriptInteractionTest extends TestCase
 
             $status = proc_get_status($process);
             if (!$status['running']) {
+                $exitCode = $status['exitcode'];
                 break;
             }
 
@@ -127,7 +129,10 @@ final class TerminalScriptInteractionTest extends TestCase
 
         fclose($pipes[1]);
         fclose($pipes[2]);
-        $exitCode = proc_close($process);
+        $closeExitCode = proc_close($process);
+        if ($exitCode < 0) {
+            $exitCode = $closeExitCode;
+        }
 
         if ($timedOut) {
             $this->fail('Wise CLI process timed out. stdout: ' . $stdout . ' stderr: ' . $stderr);
