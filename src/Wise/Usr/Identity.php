@@ -8,19 +8,23 @@ use BlueFission\Arr;
 use BlueFission\Str;
 use BlueFission\Val;
 use BlueFission\Wise\Usr\Profile;
+use BlueFission\Wise\Usr\Auth\AuthProviderInterface;
+use BlueFission\Wise\Usr\Auth\AuthRequest;
 
 class Identity {
 	protected $_authenticator;
 	protected $_kernel;
+    protected ?AuthProviderInterface $_provider;
 
 	protected $_username = '';
 	protected $_password = '';
 
 	protected $_attempts = 3;
 
-	public function __construct(Kernel $kernel, Authenticator $authenticator) {
+	public function __construct(Kernel $kernel, Authenticator $authenticator, ?AuthProviderInterface $provider = null) {
 		$this->_kernel = $kernel;
 		$this->_authenticator = $authenticator;
+        $this->_provider = $provider;
 	}
 
 	public function prompt() {
@@ -60,19 +64,36 @@ class Identity {
 	}
 
 	public function authenticate($username, $password) {
+		if ($this->_provider?->available()) {
+            $this->_provider->authenticate(new AuthRequest((string)$username, (string)$password));
+            return;
+        }
 		$this->_authenticator->authenticate($username, $password);
 	}
 
 	public function logout() {
+		if ($this->_provider?->available()) {
+            $this->_provider->logout();
+            return;
+        }
 		$this->_authenticator->logout();
 	}
 
 	public function isAuthenticated() {
+		if ($this->_provider?->available()) {
+            return $this->_provider->isAuthenticated();
+        }
 		return $this->_authenticator->isAuthenticated();
 	}
 
 	public function profile(): Profile
 	{
+		$providerProfile = $this->_provider?->available()
+			? $this->_provider->profile()
+			: null;
+		if (Val::is($providerProfile)) {
+            return $providerProfile;
+        }
 		$id = '';
 		$authId = $this->_authenticator->id ?? null;
 		$authUsername = $this->_authenticator->username ?? null;
