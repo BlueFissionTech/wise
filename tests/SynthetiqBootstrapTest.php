@@ -5,6 +5,8 @@ namespace BlueFission\Tests;
 use BlueFission\Wise\Nav\SynthetiqBootstrap;
 use BlueFission\Wise\Nav\SynthetiqProxy;
 use BlueFission\Wise\Sys\DirectoryManager;
+use BlueFission\Wise\Sys\FileSystemManager;
+use BlueFission\Str;
 use PHPUnit\Framework\TestCase;
 
 final class SynthetiqBootstrapTest extends TestCase
@@ -100,6 +102,44 @@ final class SynthetiqBootstrapTest extends TestCase
 
         $this->assertIsString($response);
         $this->assertNotSame('', $response);
+    }
+
+    public function testBootstrapReusesMatchingRouteState(): void
+    {
+        $vendorPath = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'bluefission' . DIRECTORY_SEPARATOR . 'synthetiq' . DIRECTORY_SEPARATOR . 'sample_configs';
+        if (!DirectoryManager::pathExists($vendorPath)) {
+            $this->markTestSkipped('Synthetiq sample configs not available.');
+        }
+        $this->skipIfSynthetiqRuntimeUnavailable();
+
+        $modelPath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wise-synthetiq-cache-' . Str::uuid4();
+        $events = [];
+        $config = [
+            'dialogue' => [
+                'wise.test.intent' => ['wise.test.intent', ['wise test response'], ['wise-intent']],
+            ],
+            'intent_boosts' => [],
+            'grammar' => require $vendorPath . DIRECTORY_SEPARATOR . 'grammar.php',
+            'tokens' => require $vendorPath . DIRECTORY_SEPARATOR . 'tokens.php',
+            'documenter' => require $vendorPath . DIRECTORY_SEPARATOR . 'documenter.php',
+            'model_path' => $modelPath,
+            'progress' => static function (string $stage, string $message, array $meta) use (&$events): void {
+                if ($stage === 'routes') {
+                    $events[] = $meta;
+                }
+            },
+        ];
+
+        SynthetiqBootstrap::fromConfig($config);
+        $this->assertFalse($events[0]['cache']);
+        $this->assertTrue(FileSystemManager::pathExists(
+            $modelPath . DIRECTORY_SEPARATOR . 'route_training_state.json'
+        ));
+
+        $events = [];
+        SynthetiqBootstrap::fromConfig($config);
+
+        $this->assertTrue($events[0]['cache']);
     }
 
     public function testBootstrapReportsUnavailablePartialRuntime(): void

@@ -26,12 +26,18 @@ class SynthetiqProxy implements INavigator
 
     public function handoff(string $input, array $context = []): SynthetiqContextHandoff
     {
+        $source = 'synthetiq.processInput';
         try {
-            $result = $this->_synthetiq->processInput($input);
+            if (method_exists($this->_synthetiq, 'processInputEnvelope')) {
+                $source = 'synthetiq.processInputEnvelope';
+                $result = $this->_synthetiq->processInputEnvelope($input);
+            } else {
+                $result = $this->_synthetiq->processInput($input);
+            }
         } catch (\Throwable $e) {
             return SynthetiqContextHandoff::failure($e->getMessage(), Arr::merge($context, [
                 'diagnostics' => [
-                    'source' => 'synthetiq.processInput',
+                    'source' => $source,
                     'exception' => get_class($e),
                 ],
             ]));
@@ -42,7 +48,7 @@ class SynthetiqProxy implements INavigator
         $handoff['handoff_status'] = $handoff['handoff_status'] ?? SynthetiqContextHandoff::STATUS_ACCEPTED;
         $handoff['provenance'] = Arr::merge(
             Arr::hasKey($handoff, 'provenance') && Arr::is($handoff['provenance']) ? $handoff['provenance'] : [],
-            ['source' => 'synthetiq.processInput']
+            ['source' => $source]
         );
         $handoff['diagnostics'] = Arr::merge(
             Arr::hasKey($handoff, 'diagnostics') && Arr::is($handoff['diagnostics']) ? $handoff['diagnostics'] : [],
