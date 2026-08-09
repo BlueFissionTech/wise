@@ -18,11 +18,12 @@ use BlueFission\Services\Authenticator as Auth;
 use BlueFission\Collections\Collection;
 use BlueFission\Behavioral\Behaviors\Event;
 use BlueFission\IPC\IPC;
+use BlueFission\Arr;
 use BlueFission\Str;
 use BlueFission\Val;
 use BlueFission\Wise\Usr\Profile;
 use BlueFission\Wise\Sys\Memory\WorkingMemoryCoordinator;
-use BlueFission\Wise\Exe\{BridgeRegistry, BridgeContext};
+use BlueFission\Wise\Exe\{BridgeRegistry, BridgeContext, BridgeResult, ExecutionRequest};
 use BlueFission\Wise\Res\ScriptedResourceRegistry;
 
 class Kernel {
@@ -277,12 +278,29 @@ class Kernel {
         $result = $this->_bridgeRegistry->runFile($path, $context);
 
         $output = $result->output();
-        if ($output === '' && $messages !== []) {
-            $output = implode(PHP_EOL, $messages);
+        if (Str::isEmpty($output) && Val::isNotEmpty($messages)) {
+            $output = Arr::make($messages)->join(PHP_EOL)->val();
         }
 
         $this->recordMemoryOutput((string)$output);
         $this->_output = $output;
+    }
+
+    public function executeScript(ExecutionRequest $request): BridgeResult
+    {
+        if (Val::isNull($this->_bridgeRegistry)) {
+            return BridgeResult::failure('No script bridges configured.');
+        }
+
+        $path = $this->resolveScriptPath($request->path(), $this->scriptBasePath());
+        if (Val::isNull($path)) {
+            return BridgeResult::failure('Script not found or unsupported.');
+        }
+
+        $messages = [];
+        $context = $this->buildBridgeContext($messages);
+
+        return $this->_bridgeRegistry->execute($request->withPath($path), $context);
     }
 
     public function validateScript(string $request): string

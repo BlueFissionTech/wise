@@ -8,6 +8,7 @@ use BlueFission\Val;
 use BlueFission\Wise\Arc\Kernel;
 use BlueFission\Data\FileSystem;
 use BlueFission\Wise\Res\ResourceHelper;
+use BlueFission\Wise\Exe\ExecutionRequest;
 use BlueFission\Behavioral\Behaviors\Behavior;
 
 class CommandHandler {
@@ -70,6 +71,7 @@ class CommandHandler {
         $this->registerAlias('exit', 'exit');
         $this->registerAlias('mem', 'memory');
         $this->registerAlias('validate', 'validateScript');
+        $this->registerAlias('run', 'runScript');
         // Add more aliases as needed
     }
 
@@ -194,6 +196,58 @@ class CommandHandler {
         }
 
         return $this->_kernel->validateScript((string)$path);
+    }
+
+    public function runScript($path = null, ...$options): string
+    {
+        if (Val::isNull($path) || Str::isEmpty((string)$path)) {
+            return 'Usage: run <script> [--arg=value] [--cwd=path] [--stdin=value] [--env=KEY=VALUE] [--cap=name] [--timeout=ms]';
+        }
+
+        $arguments = [];
+        $environment = [];
+        $capabilities = [];
+        $workingDirectory = null;
+        $standardInput = '';
+        $timeoutMs = 0;
+
+        foreach ($options as $option) {
+            $option = (string)$option;
+            if (Str::startsWith($option, '--arg=')) {
+                $arguments[] = Str::sub($option, 6);
+            } elseif (Str::startsWith($option, '--cwd=')) {
+                $workingDirectory = Str::sub($option, 6);
+            } elseif (Str::startsWith($option, '--stdin=')) {
+                $standardInput = Str::sub($option, 8);
+            } elseif (Str::startsWith($option, '--env=')) {
+                $pair = Str::make(Str::sub($option, 6))->splitBy('/=/', 2)->toArray();
+                if (Arr::size($pair) === 2 && Str::isNotEmpty((string)$pair[0])) {
+                    $environment[(string)$pair[0]] = (string)$pair[1];
+                }
+            } elseif (Str::startsWith($option, '--cap=')) {
+                $capabilities = Arr::merge(
+                    $capabilities,
+                    Str::make(Str::sub($option, 6))->split(',')->toArray()
+                );
+            } elseif (Str::startsWith($option, '--timeout=')) {
+                $timeout = Str::sub($option, 10);
+                $timeoutMs = is_numeric($timeout) ? (int)$timeout : 0;
+            } else {
+                $arguments[] = $option;
+            }
+        }
+
+        $result = $this->_kernel->executeScript(new ExecutionRequest(
+            (string)$path,
+            $arguments,
+            $workingDirectory,
+            $standardInput,
+            $environment,
+            $capabilities,
+            $timeoutMs
+        ));
+
+        return $result->output();
     }
 
     // Add more internal commands as needed

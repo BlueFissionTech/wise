@@ -133,4 +133,25 @@ class BridgeContext extends Obj
     {
         return $this->llm;
     }
+
+    public function scoped(
+        array $env = [],
+        array $basePaths = [],
+        array $vars = [],
+        array $includePaths = []
+    ): self
+    {
+        return new self(
+            $this->kernel,
+            $this->console,
+            $env,
+            $basePaths,
+            $includePaths,
+            $vars,
+            $this->outputHandler,
+            $this->promptHandler,
+            $this->resourceResolver,
+            $this->llm
+        );
+    }
 }
