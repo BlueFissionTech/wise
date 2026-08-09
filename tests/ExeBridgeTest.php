@@ -72,6 +72,34 @@ final class ExeBridgeTest extends TestCase
         $this->assertSame('bad-inline.jss', $result->meta()['path'] ?? null);
     }
 
+    public function testJenssBridgeValidatesFileWithoutExecutingIt(): void
+    {
+        if (!class_exists(\BlueFission\Jenerator\Parsing\JenssParser::class)) {
+            $this->markTestSkipped('JenSS parser not available.');
+        }
+
+        $path = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'examples'
+            . DIRECTORY_SEPARATOR . 'root' . DIRECTORY_SEPARATOR . 'cmd'
+            . DIRECTORY_SEPARATOR . 'hello.jss';
+
+        $result = (new JenssBridge())->validateFile($path, new BridgeContext());
+
+        $this->assertTrue($result->successFlag());
+        $this->assertSame('Script is valid.', $result->output());
+        $this->assertSame('validate', $result->meta()['mode'] ?? null);
+    }
+
+    public function testRegistryRejectsValidationForExecutionOnlyBridge(): void
+    {
+        $registry = new BridgeRegistry();
+        $registry->register(new VibeBridge());
+
+        $result = $registry->validateFile('template.vibe', new BridgeContext());
+
+        $this->assertFalse($result->successFlag());
+        $this->assertStringContainsString('No validating bridge registered', $result->output());
+    }
+
     public function testVibeBridgeReportsMissingDependency(): void
     {
         $bridge = new VibeBridge();
