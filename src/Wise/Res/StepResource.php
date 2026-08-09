@@ -7,18 +7,17 @@ use BlueFission\Services\Service;
 use BlueFission\Data\Storage\Disk;
 use BlueFission\Behavioral\IDispatcher;
 use BlueFission\SimpleClients\OpenAIClient;
-use BlueFission\Wise\Sys\DirectoryManager;
+use BlueFission\Wise\Sys\StorageRoot;
 
 class StepResource extends Service {
 
     private $_steps;
     private $_storage;
 
-    public function __construct() {
+    public function __construct(?StorageRoot $storageRoot = null) {
         parent::__construct();
 
-        $storagePath = OPUS_ROOT . '/storage/system';
-        DirectoryManager::ensurePath($storagePath);
+        $storagePath = ($storageRoot ?? new StorageRoot())->prepare('system');
         $this->_storage = new Disk([
             'location' => $storagePath,
             'name' => 'steps_data.json',

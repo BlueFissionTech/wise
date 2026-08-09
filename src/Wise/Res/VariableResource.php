@@ -3,7 +3,7 @@ namespace BlueFission\Wise\Res;
 
 use BlueFission\Wise\Res\BaseResource;
 use BlueFission\Data\Storage\Disk;
-use BlueFission\Wise\Sys\DirectoryManager;
+use BlueFission\Wise\Sys\StorageRoot;
 
 class VariableResource extends BaseResource
 {
@@ -13,13 +13,12 @@ class VariableResource extends BaseResource
     protected $_actions = ['get', 'set', 'list', 'show', 'next', 'previous', 'search', 'delete', 'help'];
     protected $_listType;
 
-    public function __construct()
+    public function __construct(?StorageRoot $storageRoot = null)
     {
         $this->_key = null;
-        parent::__construct();
+        parent::__construct($storageRoot);
 
-        $storagePath = OPUS_ROOT . '/storage/system';
-        DirectoryManager::ensurePath($storagePath);
+        $storagePath = $this->storagePath();
         $this->_storage = new Disk([
             'location' => $storagePath,
             'name' => "{$this->_location}.json",

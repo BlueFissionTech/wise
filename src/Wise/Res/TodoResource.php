@@ -3,7 +3,7 @@ namespace BlueFission\Wise\Res;
 
 use BlueFission\Wise\Res\BaseResource;
 use BlueFission\Data\Storage\Disk;
-use BlueFission\Wise\Sys\DirectoryManager;
+use BlueFission\Wise\Sys\StorageRoot;
 
 class TodoResource extends BaseResource
 {
@@ -12,14 +12,13 @@ class TodoResource extends BaseResource
     protected $_name = 'todo';
     protected $_actions = ['list', 'make', 'previous', 'next', 'create', 'open', 'edit', 'add', 'select', 'delete', 'search', 'help'];
 
-    public function __construct()
+    public function __construct(?StorageRoot $storageRoot = null)
     {
         $this->_itemName = 'list';
         $this->_subItemName = 'task';
-        parent::__construct();
+        parent::__construct($storageRoot);
 
-        $storagePath = OPUS_ROOT . '/storage/system';
-        DirectoryManager::ensurePath($storagePath);
+        $storagePath = $this->storagePath();
         $this->_storage = new Disk([
             'location' => $storagePath,
             'name' => "{$this->_location}.json",
