@@ -7,10 +7,11 @@ use BlueFission\Behavioral\Behaviors\Event;
 use BlueFission\Behavioral\Behaviors\Meta;
 use BlueFission\Obj;
 use BlueFission\Str;
+use BlueFission\Val;
 use BlueFission\Wise\Sys\DirectoryManager;
 use BlueFission\Wise\Sys\FileSystemManager;
 
-class JenssBridge extends Obj implements IBridge
+class JenssBridge extends Obj implements IBridge, IValidatingBridge
 {
     private const JENERATOR_PARSER = \BlueFission\Jenerator\Parsing\JenssParser::class;
     private const JENERATOR_INTERPRETER = \BlueFission\Jenerator\Runtime\Interpreter::class;
@@ -74,6 +75,53 @@ class JenssBridge extends Obj implements IBridge
             return BridgeResult::failure('JenSS execution failed: ' . $e->getMessage(), [
                 'path' => $path,
                 'exception' => $e::class,
+            ]);
+        }
+    }
+
+    public function validateFile(string $path, BridgeContext $context): BridgeResult
+    {
+        $this->dispatch(Event::STARTED, new Meta(data: [
+            'path' => $path,
+            'mode' => 'validate',
+        ], src: $this));
+
+        $classes = $this->resolveRuntimeClasses();
+        if (Val::isNull($classes)) {
+            $this->dispatch(Event::FAILURE, new Meta(data: [
+                'path' => $path,
+                'mode' => 'validate',
+            ], src: $this));
+
+            return BridgeResult::failure('JenSS interpreter is not available in this environment.');
+        }
+
+        $parserClass = $classes['parser'];
+
+        try {
+            $parser = new $parserClass();
+            $parser->parseFile($path);
+
+            $this->dispatch(Event::COMPLETE, new Meta(data: [
+                'path' => $path,
+                'mode' => 'validate',
+            ], src: $this));
+
+            return BridgeResult::success('Script is valid.', [
+                'path' => $path,
+                'mode' => 'validate',
+            ]);
+        } catch (\Throwable $exception) {
+            $this->dispatch(Event::FAILURE, new Meta(data: [
+                'path' => $path,
+                'mode' => 'validate',
+                'error' => $exception->getMessage(),
+            ], src: $this));
+
+            return BridgeResult::failure('JenSS validation failed: ' . $exception->getMessage(), [
+                'path' => $path,
+                'mode' => 'validate',
+                'exception' => $exception::class,
             ]);
         }
     }

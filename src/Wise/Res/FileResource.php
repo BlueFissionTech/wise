@@ -3,15 +3,17 @@ namespace BlueFission\Wise\Commands;
 
 use BlueFission\Services\Service;
 use BlueFission\Data\FileSystem;
-use BlueFission\Wise\Sys\DirectoryManager;
+use BlueFission\Wise\Sys\StorageRoot;
 
 class FileResource extends Service {
     private $_fileSystem;
+    private StorageRoot $_storageRoot;
 
-    public function __construct() {
+    public function __construct(?StorageRoot $storageRoot = null) {
         parent::__construct();
+        $this->_storageRoot = $storageRoot ?? new StorageRoot();
         $this->_fileSystem = new FileSystem([
-            'root'=>OPUS_ROOT . 'storage/files',
+            'root'=>$this->_storageRoot->prepare('files'),
             'mode'=>'a+',
             'filter'=>['..', 'txt', 'html', 'json', 'xml', 'csv', 'tsv', 'md', '' ]
         ]);
@@ -71,8 +73,7 @@ class FileResource extends Service {
     }
 
     private function createFilesDirectory() {
-        $path = OPUS_ROOT . '/storage/files';
-        DirectoryManager::ensurePath($path);
+        $this->_storageRoot->prepare('files');
     }
 
     public function help() {
@@ -158,7 +159,7 @@ class FileResource extends Service {
     }
 
     private function listDirectory() {
-        $path = OPUS_ROOT . '/storage/files';
+        $path = $this->_storageRoot->prepare('files');
         $files = scandir($path);
 
         $response = "List of files in the directory:" . PHP_EOL;

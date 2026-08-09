@@ -9,6 +9,7 @@ use BlueFission\Wise\Exe\BridgeContext;
 use BlueFission\Wise\Exe\BridgeRegistry;
 use BlueFission\Wise\Exe\BridgeResult;
 use BlueFission\Wise\Exe\IBridge;
+use BlueFission\Wise\Exe\IValidatingBridge;
 use BlueFission\Wise\Sys\FileSystemManager;
 use BlueFission\Wise\Sys\DirectoryManager;
 use BlueFission\Wise\Sys\KeyInputManager;
@@ -103,6 +104,22 @@ final class CommandPipelineTest extends TestCase
         $this->assertFalse($kernel->isRunning());
     }
 
+    public function testValidateCommandParsesScriptWithoutExecutingIt(): void
+    {
+        $kernel = $this->makeKernel();
+        $bridge = new FakeBridge();
+        $registry = new BridgeRegistry();
+        $registry->register($bridge);
+        $kernel->setBridgeRegistry($registry);
+
+        $kernel->handle('validate cmd/hello.jss');
+
+        $this->assertSame('Script is valid.', $kernel->lastOutput());
+        $this->assertSame([], $bridge->paths());
+        $this->assertCount(1, $bridge->validatedPaths());
+        $this->assertStringEndsWith('cmd' . DIRECTORY_SEPARATOR . 'hello.jss', $bridge->validatedPaths()[0]);
+    }
+
     private function makeKernel(): TestKernel
     {
         $processManager = new ProcessManager();
@@ -173,9 +190,10 @@ final class TestKernel extends Kernel
     }
 }
 
-final class FakeBridge implements IBridge
+final class FakeBridge implements IBridge, IValidatingBridge
 {
     private array $paths = [];
+    private array $validatedPaths = [];
 
     public function name(): string
     {
@@ -204,12 +222,30 @@ final class FakeBridge implements IBridge
         return BridgeResult::success('ran:' . $label);
     }
 
+    public function validateFile(string $path, BridgeContext $context): BridgeResult
+    {
+        $this->validatedPaths[] = $path;
+
+        return BridgeResult::success('Script is valid.', [
+            'path' => $path,
+            'mode' => 'validate',
+        ]);
+    }
+
     /**
      * @return array<int, string>
      */
     public function paths(): array
     {
         return $this->paths;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function validatedPaths(): array
+    {
+        return $this->validatedPaths;
     }
 }
 

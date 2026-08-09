@@ -6,20 +6,21 @@ use BlueFission\BlueCore\Business\Prompts\MakeNote;
 use BlueFission\SimpleClients\OpenAIClient;
 use BlueFission\Data\Storage\Disk;
 use BlueFission\Services\Service;
-use BlueFission\Wise\Sys\DirectoryManager;
+use BlueFission\Wise\Sys\StorageRoot;
 
 class NoteResource extends Service
 {
     private $_storage;
+    private StorageRoot $_storageRoot;
     private $_page = 1;
     private $_perPage = 5;
 
-    public function __construct()
+    public function __construct(?StorageRoot $storageRoot = null)
     {
         parent::__construct();
+        $this->_storageRoot = $storageRoot ?? new StorageRoot();
 
-        $storagePath = OPUS_ROOT . '/storage/system';
-        DirectoryManager::ensurePath($storagePath);
+        $storagePath = $this->_storageRoot->prepare('system');
         $this->_storage = new Disk([
             'location' => $storagePath,
             'name' => 'note_data.json',
@@ -260,7 +261,7 @@ class NoteResource extends Service
 
     private function getCurrentTask()
     {
-        $storagePath = OPUS_ROOT . '/storage/system';
+        $storagePath = $this->_storageRoot->prepare('system');
         
         $storage = new Disk([
             'location' => $storagePath,

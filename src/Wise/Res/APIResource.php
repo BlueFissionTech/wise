@@ -4,7 +4,7 @@ namespace BlueFission\Wise\Res;
 use BlueFission\Wise\Res\BaseResource;
 use BlueFission\SimpleClients\OpenAIClient;
 use BlueFission\Data\Storage\Disk;
-use BlueFission\Wise\Sys\DirectoryManager;
+use BlueFission\Wise\Sys\StorageRoot;
 use \BlueFission\Connections\Curl;
 
 class APIResource extends BaseResource
@@ -14,15 +14,14 @@ class APIResource extends BaseResource
     protected $_name = 'api';
     protected $_actions = ['use', 'create', 'generate', 'list', 'previous', 'next', 'show', 'delete', 'help'];
 
-    public function __construct()
+    public function __construct(?StorageRoot $storageRoot = null)
     {
         $this->_itemName = 'remote call';
         $this->_helpDetails['make'] = ["  - create: Create a new api call with the given name, description, and parameters.", "      Usage: `create api <name> \"<description>\" by <method> at <url> with \"<params>\" \"<code>\"`"];
         $this->_helpDetails['do'] = ["  - use: Invoke the api call with the given name, passing in the specified parameters.", "      Usage: `use the api <api call name> with [\"<parameters>\"...]`"];
-        parent::__construct();
+        parent::__construct($storageRoot);
 
-        $storagePath = OPUS_ROOT . '/storage/system';
-        DirectoryManager::ensurePath($storagePath);
+        $storagePath = $this->storagePath();
         $this->_storage = new Disk([
             'location' => $storagePath,
             'name' => "{$this->_location}.json",

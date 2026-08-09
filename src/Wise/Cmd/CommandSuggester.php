@@ -34,6 +34,18 @@ class CommandSuggester
         $tokens = preg_split('/\s+/', $input);
         $lastToken = Str::make((string)($tokens[Arr::size($tokens) - 1] ?? ''))->lower()->val();
 
+        if (Arr::has($this->resources, $lastToken, true)) {
+            $verbs = Arr::make($this->verbsForResource($lastToken))->slice(0, 3);
+            if ($verbs->isNotEmpty()) {
+                $suggestions = $verbs
+                    ->map(fn($verb) => "{$verb} {$lastToken}")
+                    ->values()
+                    ->toArray();
+
+                return 'tab: ' . Arr::make($suggestions)->join(' | ')->val();
+            }
+        }
+
         if (Str::isEmpty((string)$command->verb) && !Str::isEmpty($lastToken)) {
             $verb = $this->bestMatch($lastToken, $this->verbs);
             if (Val::isNotEmpty($verb)) {
@@ -87,6 +99,13 @@ class CommandSuggester
         $command = $this->parser->parse($input);
         $tokens = preg_split('/\s+/', $input);
         $lastToken = Str::make((string)($tokens[Arr::size($tokens) - 1] ?? ''))->lower()->val();
+
+        if (Arr::has($this->resources, $lastToken, true)) {
+            $verbs = $this->verbsForResource($lastToken);
+            if (Arr::isNotEmpty($verbs)) {
+                return Str::make("{$verbs[0]} {$lastToken}")->trim()->val();
+            }
+        }
 
         if (Str::isEmpty((string)$command->verb) && !Str::isEmpty($lastToken)) {
             $verb = $this->bestMatch($lastToken, $this->verbs);

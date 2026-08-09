@@ -61,4 +61,31 @@ class BridgeRegistry extends Obj
 
         return $result;
     }
+
+    public function validateFile(string $path, BridgeContext $context): BridgeResult
+    {
+        $this->dispatch(Event::STARTED, new Meta(data: [
+            'path' => $path,
+            'mode' => 'validate',
+        ], src: $this));
+
+        $bridge = $this->bridgeForFile($path);
+        if (!$bridge instanceof IValidatingBridge) {
+            $this->dispatch(Event::FAILURE, new Meta(data: [
+                'path' => $path,
+                'mode' => 'validate',
+            ], src: $this));
+
+            return BridgeResult::failure('No validating bridge registered for file: ' . $path);
+        }
+
+        $result = $bridge->validateFile($path, $context);
+        $this->dispatch($result->successFlag() ? Event::COMPLETE : Event::FAILURE, new Meta(data: [
+            'path' => $path,
+            'bridge' => $bridge->name(),
+            'mode' => 'validate',
+        ], src: $this));
+
+        return $result;
+    }
 }

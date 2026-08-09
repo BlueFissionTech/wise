@@ -9,8 +9,10 @@ use BlueFission\Num;
 use BlueFission\Services\Service;
 use BlueFission\Str;
 use BlueFission\Val;
+use BlueFission\Wise\Sys\StorageRoot;
 
 abstract class BaseResource extends Service {
+    protected StorageRoot $_storageRoot;
     protected $_entries = [];
     protected $_selected = null;
     protected $_page;
@@ -40,8 +42,9 @@ abstract class BaseResource extends Service {
     protected int $_outputPreviewChars = 240;
     protected int $_outputFullMax = 2000;
 
-	public function __construct( )
+	public function __construct(?StorageRoot $storageRoot = null)
 	{
+        $this->_storageRoot = $storageRoot ?? new StorageRoot();
         $this->_location = $this->_location ?? "{$this->_name}_data";
         $this->_page = (int)store("_system.{$this->_name}.page");
         $this->_perPage = (int)store("_system.{$this->_name}.per_page");
@@ -59,6 +62,11 @@ abstract class BaseResource extends Service {
 
 		parent::__construct();
 	}
+
+    protected function storagePath(string $scope = 'system'): string
+    {
+        return $this->_storageRoot->prepare($scope);
+    }
 
     public function handle($behavior, $args)
     {

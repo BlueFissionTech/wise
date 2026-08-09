@@ -9,6 +9,8 @@ use BlueFission\Wise\Sys\Drivers\IDisplayDriver;
 use BlueFission\Wise\Sys\KeyInputManager;
 use BlueFission\Wise\Sys\IO\IInputSource;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
+use ReflectionProperty;
 
 final class ReplKeyInputTest extends TestCase
 {
@@ -58,6 +60,24 @@ final class ReplKeyInputTest extends TestCase
         $console->listen();
 
         $this->assertNotSame('', $repl->hintValue());
+    }
+
+    public function testHintRenderingDoesNotMutatePromptOrCursor(): void
+    {
+        $input = new SequenceInputSource(['list']);
+        $console = $this->makeConsole($input);
+        $repl = new REPL();
+        $console->addComponent($repl);
+        $console->listen();
+
+        $cursorProperty = new ReflectionProperty($repl, '_cursor');
+        $cursor = $cursorProperty->getValue($repl);
+        $before = [$repl->inputValue(), $cursor->getX(), $cursor->getY()];
+
+        $updateHint = new ReflectionMethod($repl, 'updateHint');
+        $updateHint->invoke($repl, 'show');
+
+        $this->assertSame($before, [$repl->inputValue(), $cursor->getX(), $cursor->getY()]);
     }
 
     public function testTabCompletesPromptBuffer(): void
