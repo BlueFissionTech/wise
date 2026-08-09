@@ -69,6 +69,7 @@ class CommandHandler {
         $this->registerAlias('clear', 'clearScreen');
         $this->registerAlias('exit', 'exit');
         $this->registerAlias('mem', 'memory');
+        $this->registerAlias('validate', 'validateScript');
         // Add more aliases as needed
     }
 
@@ -184,6 +185,15 @@ class CommandHandler {
 
     public function exit() {
         return 'Goodbye.';
+    }
+
+    public function validateScript($path = null): string
+    {
+        if (Val::isNull($path) || Str::isEmpty((string)$path)) {
+            return 'Usage: validate <script>';
+        }
+
+        return $this->_kernel->validateScript((string)$path);
     }
 
     // Add more internal commands as needed

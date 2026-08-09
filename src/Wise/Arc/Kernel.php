@@ -19,6 +19,7 @@ use BlueFission\Collections\Collection;
 use BlueFission\Behavioral\Behaviors\Event;
 use BlueFission\IPC\IPC;
 use BlueFission\Str;
+use BlueFission\Val;
 use BlueFission\Wise\Usr\Profile;
 use BlueFission\Wise\Sys\Memory\WorkingMemoryCoordinator;
 use BlueFission\Wise\Exe\{BridgeRegistry, BridgeContext};
@@ -284,6 +285,23 @@ class Kernel {
         $this->_output = $output;
     }
 
+    public function validateScript(string $request): string
+    {
+        if (Val::isNull($this->_bridgeRegistry)) {
+            return 'No script bridges configured.';
+        }
+
+        $path = $this->resolveScriptPath($request, $this->scriptBasePath());
+        if (Val::isNull($path)) {
+            return 'Script not found or unsupported.';
+        }
+
+        $messages = [];
+        $context = $this->buildBridgeContext($messages);
+
+        return $this->_bridgeRegistry->validateFile($path, $context)->output();
+    }
+
     public function runAsync( $task ){
         // Call the do method statically
         return $this->_async::do($task);
@@ -481,6 +499,10 @@ class Kernel {
 
     private function resolveScriptPath(string $path, string $basePath): ?string
     {
+        $path = Str::make($path)
+            ->replace('/', DIRECTORY_SEPARATOR)
+            ->replace('\\', DIRECTORY_SEPARATOR)
+            ->val();
         $candidate = $path;
         if (!FileSystemManager::pathExists($candidate)) {
             $candidate = $basePath . DIRECTORY_SEPARATOR . $path;
