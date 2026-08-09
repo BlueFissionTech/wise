@@ -40,6 +40,15 @@ final class CommandSuggesterTest extends TestCase
         $this->assertStringContainsString('list all resources', $hint);
     }
 
+    public function testSuggestsActionsForResourceOnlyInput(): void
+    {
+        $suggester = new CommandSuggester();
+        $hint = $suggester->hint('todo');
+
+        $this->assertStringContainsString('todo', $hint);
+        $this->assertMatchesRegularExpression('/tab: [a-z]+ todo/', $hint);
+    }
+
     public function testCompletesPartialVerb(): void
     {
         $suggester = new CommandSuggester();
