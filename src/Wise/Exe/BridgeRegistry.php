@@ -2,6 +2,7 @@
 
 namespace BlueFission\Wise\Exe;
 
+use BlueFission\Arr;
 use BlueFission\Behavioral\Behaviors\Event;
 use BlueFission\Behavioral\Behaviors\Meta;
 use BlueFission\Obj;
@@ -24,13 +25,10 @@ class BridgeRegistry extends Obj
     {
         $extensions = [];
         foreach ($this->bridges as $bridge) {
-            $extensions = array_merge($extensions, $bridge->extensions());
+            $extensions = Arr::merge($extensions, $bridge->extensions());
         }
 
-        $extensions = array_values(array_unique($extensions));
-        sort($extensions);
-
-        return $extensions;
+        return Arr::make($extensions)->unique()->values()->sort()->toArray();
     }
 
     public function bridgeForFile(string $path): ?IBridge

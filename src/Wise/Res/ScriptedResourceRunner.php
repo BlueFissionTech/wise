@@ -2,7 +2,10 @@
 
 namespace BlueFission\Wise\Res;
 
+use BlueFission\Arr;
+use BlueFission\Date;
 use BlueFission\Str;
+use BlueFission\Val;
 use BlueFission\Wise\Arc\Kernel;
 use BlueFission\Wise\Exe\BridgeRegistry;
 
@@ -22,7 +25,7 @@ class ScriptedResourceRunner
     public function run(ScriptedResourceDefinition $definition, string $action, array $args): string
     {
         $path = $definition->path();
-        if (!$this->bridges->bridgeForFile($path)) {
+        if (!Val::is($this->bridges->bridgeForFile($path))) {
             return 'No script bridge registered for ' . $definition->name() . '.';
         }
 
@@ -41,12 +44,12 @@ class ScriptedResourceRunner
                 'recipient' => $recipient,
                 'content' => $content,
                 'status' => 'queued',
-                'created_at' => date('c'),
+                'created_at' => (string)Date::now()->format('c'),
             ];
             $this->store->add($resource, $entry);
             $entries = $this->store->list($resource);
         } elseif ($action === 'show') {
-            $id = (string)($normalizedArgs[0] ?? '');
+            $id = (string)(Val::is($normalizedArgs[0] ?? null) ? $normalizedArgs[0] : '');
             if ($id !== '') {
                 $entry = $entries[$id] ?? null;
             }
@@ -68,8 +71,8 @@ class ScriptedResourceRunner
             'action' => $action,
             'args' => $normalizedArgs,
             'entries' => $formattedEntries,
-            'count' => count($formattedEntries),
-            'total' => count($entries),
+            'count' => Arr::size($formattedEntries),
+            'total' => Arr::size($entries),
             'entry' => $entry,
             'detail' => $detail,
             'recipient' => $recipient,
@@ -81,8 +84,8 @@ class ScriptedResourceRunner
         $result = $this->bridges->runFile($path, $context);
         $output = $result->output();
 
-        if ($output === '' && $messages !== []) {
-            $output = implode(PHP_EOL, $messages);
+        if (Str::isEmpty($output) && Arr::isNotEmpty($messages)) {
+            $output = Arr::make($messages)->join(PHP_EOL)->val();
         }
 
         return $output;
@@ -93,15 +96,15 @@ class ScriptedResourceRunner
         $filtered = [];
         $resourcePlural = Str::pluralize($resource);
         foreach ($args as $arg) {
-            $value = trim((string)$arg);
-            if ($value === '') {
+            $value = Str::make((string)$arg)->trim();
+            if ($value->isEmpty()) {
                 continue;
             }
-            $lower = strtolower($value);
-            if (in_array($lower, ['new', $resource, $resourcePlural], true)) {
+            $lower = $value->copy()->lower()->val();
+            if (Arr::has(['new', $resource, $resourcePlural], $lower, true)) {
                 continue;
             }
-            $filtered[] = $value;
+            $filtered[] = $value->val();
         }
 
         return $filtered;
@@ -109,16 +112,16 @@ class ScriptedResourceRunner
 
     private function parseRecipientAndContent(array $args): array
     {
-        if ($args === []) {
+        if (Arr::isEmpty($args)) {
             return ['user', ''];
         }
 
-        if (count($args) === 1) {
+        if (Arr::size($args) === 1) {
             return ['user', (string)$args[0]];
         }
 
         $recipient = (string)$args[0];
-        $content = (string)$args[count($args) - 1];
+        $content = (string)Arr::make($args)->pop();
 
         return [$recipient !== '' ? $recipient : 'user', $content];
     }
@@ -127,7 +130,7 @@ class ScriptedResourceRunner
     {
         $lines = [];
         foreach ($entries as $entry) {
-            if (!is_array($entry)) {
+            if (!Arr::is($entry)) {
                 $lines[] = (string)$entry;
                 continue;
             }
@@ -139,9 +142,9 @@ class ScriptedResourceRunner
 
     private function formatEntry(array $entry): string
     {
-        $id = $entry['id'] ?? '';
-        $recipient = $entry['recipient'] ?? 'user';
-        $content = $entry['content'] ?? '';
+        $id = Val::is($entry['id'] ?? null) ? $entry['id'] : '';
+        $recipient = Val::is($entry['recipient'] ?? null) ? $entry['recipient'] : 'user';
+        $content = Val::is($entry['content'] ?? null) ? $entry['content'] : '';
         $preview = $this->preview($content);
 
         return "{$id} (to {$recipient}): {$preview}";
@@ -149,16 +152,16 @@ class ScriptedResourceRunner
 
     private function preview(string $content): string
     {
-        $content = trim($content);
-        if ($content === '') {
+        $content = Str::make($content)->trim();
+        if ($content->isEmpty()) {
             return '(empty)';
         }
 
         $max = 64;
-        if (strlen($content) <= $max) {
-            return $content;
+        if ($content->len() <= $max) {
+            return $content->val();
         }
 
-        return substr($content, 0, $max - 3) . '...';
+        return $content->sub(0, $max - 3)->val() . '...';
     }
 }
