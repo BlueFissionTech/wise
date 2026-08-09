@@ -4,7 +4,7 @@ namespace BlueFission\Wise\Res;
 use BlueFission\Wise\Res\BaseResource;
 use BlueFission\SimpleClients\OpenAIClient;
 use BlueFission\Data\Storage\Disk;
-use BlueFission\Wise\Sys\DirectoryManager;
+use BlueFission\Wise\Sys\StorageRoot;
 
 class ActionResource extends BaseResource
 {
@@ -13,15 +13,14 @@ class ActionResource extends BaseResource
     protected $_name = 'action';
     protected $_actions = ['run', 'create', 'generate', 'list', 'previous', 'next', 'show', 'delete', 'help'];
 
-    public function __construct()
+    public function __construct(?StorageRoot $storageRoot = null)
     {
         $this->_itemName = 'function';
         $this->_helpDetails['make'] = ["  - create: Create a new function with the given name, description, fields, and PHP code.", "      Usage: `create an action <name> that \"<description>\" with \"<jsonFormattedFields>\" by \"<code>\"`"];
         $this->_helpDetails['do'] = ["  - run: Execute the function with the given name, passing in the specified arguments.", "      Usage: `run the action <function name> with [\"<arguments>\"...]`"];
-        parent::__construct();
+        parent::__construct($storageRoot);
 
-        $storagePath = OPUS_ROOT . '/storage/system';
-        DirectoryManager::ensurePath($storagePath);
+        $storagePath = $this->storagePath();
         $this->_storage = new Disk([
             'location' => $storagePath,
             'name' => "{$this->_location}.json",

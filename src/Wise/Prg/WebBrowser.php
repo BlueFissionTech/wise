@@ -3,15 +3,23 @@
 // WebBrowser.php
 namespace BlueFission\Wise\Prg;
 
+use BlueFission\Connections\Curl;
+use BlueFission\Data\FileSystem;
+use BlueFission\Net\HTTP;
 use BlueFission\Services\Service;
+use BlueFission\Str;
+use BlueFission\Wise\Sys\StorageRoot;
 use Symfony\Component\Panther\Client;
 
 class WebBrowser extends Service
 {
     private $client;
+    private StorageRoot $storageRoot;
 
-    public function __construct()
+    public function __construct(?StorageRoot $storageRoot = null)
     {
+        parent::__construct();
+        $this->storageRoot = $storageRoot ?? new StorageRoot();
         $this->client = Client::createChromeClient();
     }
 
@@ -65,20 +73,34 @@ class WebBrowser extends Service
 
     public function downloadMedia(string $url): void
     {
-        // Note: Downloading media files can be a complex task, especially when dealing with different content types and handling large files.
-        // The following is a simple example of downloading a file, but it may not cover all edge cases and may need to be adapted for specific use cases.
-
-        $parsedUrl = parse_url($url);
-        $path = $parsedUrl['path'];
-        $filename = basename($path);
-
-        // Check if the file is downloadable by checking if the header contains 'Content-Disposition' with 'attachment'
-        $headers = get_headers($url, 1);
-        if (isset($headers['Content-Disposition']) && strpos($headers['Content-Disposition'], 'attachment') !== false) {
-            // Download the file using 'file_put_contents' function.
-            // You can change the destination path as needed.
-            file_put_contents(OPUS_ROOT."storage/downloads/{$filename}", fopen($url, 'r'));
+        $path = HTTP::urlPath($url);
+        if (!Str::is($path)) {
+            return;
         }
+
+        $filename = FileSystem::fileBasename($path);
+        if (Str::isEmpty($filename)) {
+            return;
+        }
+
+        $connection = new Curl(['target' => $url, 'method' => 'get']);
+        $connection->open()->query();
+        $contents = $connection->result();
+        $connection->close();
+
+        if (!Str::is($contents)) {
+            return;
+        }
+
+        $storage = new FileSystem([
+            'root' => $this->storageRoot->prepare('downloads'),
+            'mode' => 'w+',
+            'filter' => [],
+        ]);
+        $storage->open($filename);
+        $storage->contents($contents);
+        $storage->write();
+        $storage->close();
     }
 
     public function getLinks(string $selector): array

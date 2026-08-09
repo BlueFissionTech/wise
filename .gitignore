@@ -149,6 +149,7 @@ logs
 # Ignore the script output files
 /speech.mp3
 /speech.wav
+/storage/
 # Blue Fission Codex harness
 /docker/
 /scripts/
