@@ -15,10 +15,6 @@
     "repositories": [
         {
             "type": "vcs",
-            "url": "https://github.com/bluefissiontech/bluecore"
-        },
-        {
-            "type": "vcs",
             "url": "https://github.com/bluefissiontech/jenerator"
         },
         {
