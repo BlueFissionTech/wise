@@ -22,6 +22,7 @@ class CommandResult extends Obj
     private int $exitCode;
     private Arr $diagnostics;
     private Arr $metadata;
+    private ?Str $continuationToken;
 
     public function __construct(
         string $status,
@@ -30,7 +31,8 @@ class CommandResult extends Obj
         bool $confirmationRequired = false,
         int $exitCode = 0,
         array $diagnostics = [],
-        array $metadata = []
+        array $metadata = [],
+        ?string $continuationToken = null
     ) {
         parent::__construct();
         $this->status = Str::make($status)->trim()->lower();
@@ -41,6 +43,9 @@ class CommandResult extends Obj
         $this->exitCode = $exitCode;
         $this->diagnostics = Arr::make($diagnostics);
         $this->metadata = Arr::make($metadata);
+        $this->continuationToken = Str::isNotEmpty((string)$continuationToken)
+            ? Str::make((string)$continuationToken)->trim()
+            : null;
     }
 
     public static function completed(mixed $output, ?Command $command = null, array $metadata = []): self
@@ -53,9 +58,23 @@ class CommandResult extends Obj
         return new self(self::PARSED, null, $command, false, 0, [], $metadata);
     }
 
-    public static function pending(mixed $output, ?Command $command = null, array $metadata = []): self
+    public static function pending(
+        mixed $output,
+        ?Command $command,
+        string $continuationToken,
+        array $metadata = []
+    ): self
     {
-        return new self(self::CONFIRMATION_REQUIRED, $output, $command, true, 0, [], $metadata);
+        return new self(
+            self::CONFIRMATION_REQUIRED,
+            $output,
+            $command,
+            true,
+            0,
+            [],
+            $metadata,
+            $continuationToken
+        );
     }
 
     public static function invalid(
@@ -123,6 +142,11 @@ class CommandResult extends Obj
         return $this->metadata->toArray();
     }
 
+    public function continuationToken(): ?string
+    {
+        return $this->continuationToken?->val();
+    }
+
     public function toArray(): array
     {
         return [
@@ -134,6 +158,7 @@ class CommandResult extends Obj
             'exit_code' => $this->exitCode(),
             'diagnostics' => $this->diagnostics(),
             'metadata' => $this->metadata(),
+            'continuation_token' => $this->continuationToken(),
         ];
     }
 }

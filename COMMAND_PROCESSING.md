@@ -16,7 +16,11 @@ $result = $processor->process(new CommandRequest(
 ));
 
 if ($result->confirmationRequired()) {
-    // Ask through the host's own interaction channel.
+    // Ask through the host's own interaction channel, then resume once.
+    $result = $processor->process(CommandRequest::resume(
+        $result->continuationToken(),
+        approved: true
+    ));
 }
 
 $payload = $result->toArray();
@@ -33,6 +37,8 @@ Use `CommandRequest::parse()` for parse-only validation. Execution is the defaul
 Parse-only requests may describe resources that are not registered yet. Execute requests with an unknown structured resource return an `invalid` result with a `resource_not_found` diagnostic before service dispatch.
 
 `handle(string)` remains available for backward-compatible interactive and conversational callers. New hosts should use `process()` so they never infer state or status from rendered text.
+
+Confirmation results include an opaque continuation token. The pending attempt does not execute the command. Resume with `CommandRequest::resume($token, $approved)` exactly once; consumed and invalid tokens return deterministic invalid results, preventing approval replay from executing side effects twice. Continuations require the same session-scoped storage instance as the original request.
 
 ## Host Boundary
 

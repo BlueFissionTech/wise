@@ -111,6 +111,60 @@ final class HeadlessCommandProcessorTest extends TestCase
         $this->assertSame(CommandResult::CONFIRMATION_REQUIRED, $result->status());
         $this->assertTrue($result->confirmationRequired());
         $this->assertSame('list file', $result->description());
+        $this->assertNotEmpty($result->continuationToken());
+    }
+
+    public function testContinuationExecutesAtMostOnceAfterApproval(): void
+    {
+        $executions = 0;
+        App::instance()->register('continuation-resource', 'inspect', function () use (&$executions): void {
+            $executions++;
+        });
+        $processor = $this->processor();
+        $request = ['verb' => 'inspect', 'resource' => 'continuation-resource'];
+
+        $processor->process($request);
+        $processor->process($request);
+        $processor->process($request);
+        $pending = $processor->process($request);
+
+        $this->assertSame(3, $executions);
+        $this->assertSame(CommandResult::CONFIRMATION_REQUIRED, $pending->status());
+        $this->assertNotEmpty($pending->continuationToken());
+
+        $approved = CommandRequest::resume((string)$pending->continuationToken(), true);
+        $completed = $processor->process($approved);
+        $replayed = $processor->process($approved);
+
+        $this->assertSame(CommandResult::COMPLETED, $completed->status());
+        $this->assertSame(4, $executions);
+        $this->assertSame(CommandResult::INVALID, $replayed->status());
+        $this->assertSame(['continuation_consumed'], $replayed->diagnostics());
+        $this->assertSame(4, $executions);
+    }
+
+    public function testRejectedContinuationDoesNotExecutePendingCommand(): void
+    {
+        $executions = 0;
+        App::instance()->register('rejected-resource', 'inspect', function () use (&$executions): void {
+            $executions++;
+        });
+        $processor = $this->processor();
+        $request = ['verb' => 'inspect', 'resource' => 'rejected-resource'];
+
+        $processor->process($request);
+        $processor->process($request);
+        $processor->process($request);
+        $pending = $processor->process($request);
+        $rejected = $processor->process(CommandRequest::resume(
+            (string)$pending->continuationToken(),
+            false
+        ));
+
+        $this->assertSame(CommandResult::CONFIRMATION_REQUIRED, $pending->status());
+        $this->assertSame(CommandResult::COMPLETED, $rejected->status());
+        $this->assertSame('Command cancelled.', $rejected->output());
+        $this->assertSame(3, $executions);
     }
 
     public function testUnhandledFailuresReturnSanitizedResult(): void
@@ -154,6 +208,7 @@ final class HeadlessCommandProcessorTest extends TestCase
             'exit_code' => 0,
             'diagnostics' => [],
             'metadata' => ['request_id' => 'req-002'],
+            'continuation_token' => null,
         ], $result->toArray());
     }
 
