@@ -14,6 +14,8 @@ run on a clean checkout.
   bridge contracts without starting an interactive terminal session. Vibe runs
   use a deterministic fixture LLM so `{=...}` prompt/generation points stay
   executable without network access.
+- `headless-command.php` parses a command through the application-safe processor
+  contract and emits its structured result without terminal presentation.
 - `root/cmd` contains command scripts that are resolved from the virtual
   filesystem.
 - `root/cfg` and `root/usr/console/cfg` contain system and user config overlays.
@@ -42,6 +44,12 @@ Run the focused PHPUnit coverage for examples:
 
 ```bash
 vendor/bin/phpunit --do-not-cache-result tests/Examples
+```
+
+Inspect the headless command envelope:
+
+```bash
+php examples/headless-command.php "list file"
 ```
 
 ## Authoring Pattern
