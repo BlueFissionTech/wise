@@ -18,7 +18,6 @@ use BlueFission\Services\Authenticator as Auth;
 use BlueFission\Collections\Collection;
 use BlueFission\Behavioral\Behaviors\Event;
 use BlueFission\IPC\IPC;
-use BlueFission\Obj;
 use BlueFission\Str;
 use BlueFission\Val;
 use BlueFission\Wise\Usr\Profile;
@@ -269,7 +268,7 @@ class Kernel {
             return null;
         }
 
-        return Obj::is($service) ? $service : null;
+        return Val::make($service)->check('is_object') ? $service : null;
     }
 
     public function handleScript($request) {

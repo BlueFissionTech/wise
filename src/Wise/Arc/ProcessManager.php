@@ -4,10 +4,17 @@ namespace BlueFission\Wise\Arc;
 
 use BlueFission\Wise\Sys\MemoryManager;
 use BlueFission\Arr;
+use BlueFission\Str;
+use BlueFission\Val;
 
 class ProcessManager {
     protected $_processes;
     protected $_memoryManager;
+
+    public function __construct()
+    {
+        $this->initialize();
+    }
 
     public function initialize() {
         // Initialize process management
@@ -19,10 +26,16 @@ class ProcessManager {
     }
 
     public function createProcess($command, $input = null) {
+        if (!$this->_processes instanceof Arr) {
+            $this->initialize();
+        }
+
         $process = new Process($command, $input);
-        $pid = uniqid();
+        $pid = Str::uuid4();
         $this->_processes->set($pid, $process);
-        $this->_memoryManager->register($process, $pid);
+        if (Val::isNotNull($this->_memoryManager)) {
+            $this->_memoryManager->register($process, $pid);
+        }
 
         return $process;
     }
