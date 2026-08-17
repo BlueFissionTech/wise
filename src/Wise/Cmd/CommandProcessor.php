@@ -11,8 +11,10 @@ use BlueFission\Automata\LLM\Prompts\ConsoleResponse;
 use BlueFission\Automata\LLM\Clients\IClient;
 use BlueFission\Services\Application as App;
 use BlueFission\Wise\Nav\INavigator;
+use BlueFission\Str;
+use BlueFission\Val;
 
-class CommandProcessor
+class CommandProcessor implements ICommandProcessor
 {
     protected $_parser;
     protected $_app;
@@ -21,6 +23,9 @@ class CommandProcessor
     protected $_llmClient;
     protected $_name;
     protected $_navigator;
+    protected ?Command $_lastCommand = null;
+    protected ?string $_lastResource = null;
+    protected bool $_confirmationRequired = false;
 
     protected $_availableCommands = [];
 
@@ -62,6 +67,66 @@ class CommandProcessor
         return $this->_availableCommands;
     }
 
+    public function process(CommandRequest|Command|array|string $request): CommandResult
+    {
+        $this->_lastCommand = null;
+        $this->_lastResource = null;
+        $this->_confirmationRequired = false;
+
+        $request = $request instanceof CommandRequest ? $request : new CommandRequest($request);
+        $input = $request->input();
+
+        try {
+            if ($request->isContinuation()) {
+                return $this->resume($request);
+            }
+
+            if (Str::is($input)) {
+                if (Str::isEmpty(Str::trim($input))) {
+                    return CommandResult::invalid('No command entered.', ['input_empty'], $request->context());
+                }
+
+                if (!$request->shouldExecute()) {
+                    $command = $this->_parser->parse(Str::trim($input));
+                    if (!$command instanceof Command || !$command->complete()) {
+                        return CommandResult::invalid('Command could not be resolved.', ['command_incomplete'], $request->context());
+                    }
+                    $this->rememberCommand($command);
+                    return CommandResult::parsed($command, $request->context());
+                }
+
+                $output = $this->handle($input);
+                return $this->resultForOutput($output, $request->context());
+            }
+
+            $command = $input instanceof Command ? $input : $this->convertToCommand($input);
+            if (!$command->complete()) {
+                return CommandResult::invalid('Command could not be resolved.', ['command_incomplete'], $request->context());
+            }
+
+            $this->rememberCommand($command);
+            if (!$request->shouldExecute()) {
+                return CommandResult::parsed($command, $request->context());
+            }
+
+            if (!$this->resourceExists((string)$this->_lastResource)) {
+                return CommandResult::invalid(
+                    'Resource not found.',
+                    ['resource_not_found'],
+                    $request->context(),
+                    $command
+                );
+            }
+
+            $output = $this->executeCommand($command);
+            return $this->resultForOutput($output, $request->context());
+        } catch (\Throwable $exception) {
+            return CommandResult::failure('Command processing failed.', [
+                'exception' => $exception::class,
+            ], $request->context());
+        }
+    }
+
     public function handle($input)
     {
         $this->addToLog($input, 'input');
@@ -75,6 +140,7 @@ class CommandProcessor
         $input = trim($input);
 
         if (!empty($this->_storage->confirmCmd)) {
+            $this->_confirmationRequired = false;
             if (in_array(strtolower($input), $this->_responseWords['yes'], true)) {
                 $command = $this->convertToCommand($this->_storage->confirmCmd);
                 unset($this->_storage->currentCmd);
@@ -184,10 +250,13 @@ class CommandProcessor
             return $output;
         }
 
+        $this->rememberCommand($command);
+
         if (!$this->resourceExists($command->resources[0])) {
             if ($this->isSameCommand($command, 4)) {
                 unset($this->_storage->currentCmd);
                 $this->_storage->confirmCmd = $command;
+                $this->_confirmationRequired = true;
                 $this->_storage->write();
                 $output = "You've submitted this command over 3 times in a row. Are you sure you want to run it again? [yes/no]";
                 $this->addToLog($output, 'output');
@@ -221,10 +290,12 @@ class CommandProcessor
 
     protected function executeCommand(Command $command)
     {
+        $this->rememberCommand($command);
         // Check if the same command is submitted 3 times in a row
         if ($this->isSameCommand($command, 4)) {
             unset($this->_storage->currentCmd);
             $this->_storage->confirmCmd = $command;
+            $this->_confirmationRequired = true;
             $this->_storage->write();
             return "You've submitted this command over 3 times in a row. Are you sure you want to run it again? [yes/no]";
         }
@@ -271,6 +342,22 @@ class CommandProcessor
     {
         $command = new Command();
 
+        if (Str::is($object)) {
+            return $this->_parser->parse(Str::trim($object));
+        }
+
+        if (Arr::is($object)) {
+            $verb = $object['verb'] ?? $object['operator'] ?? $object['behavior'] ?? null;
+            $resources = $object['resources'] ?? $object['objects'] ?? $object['resource'] ?? $object['object'] ?? [];
+            $args = $object['args'] ?? $object['values'] ?? $object['literals'] ?? [];
+
+            $command->verb = Val::is($verb) ? (string)$verb : null;
+            $command->resources = Arr::is($resources) ? $resources : [$resources];
+            $command->args = Arr::is($args) ? $args : [$args];
+
+            return $command;
+        }
+
         if (isset($object->verb)) {
             $command->verb = $object->verb;
         }
@@ -302,12 +389,81 @@ class CommandProcessor
 
     public function lastCommand()
     {
-        return $this->_storage->currentCmd ?? null;
+        return $this->_lastCommand ?? $this->_storage->currentCmd ?? null;
     }
 
     public function lastResource()
     {
-        return $this->_storage->lastResource ?? null;
+        return $this->_lastResource ?? $this->_storage->lastResource ?? null;
+    }
+
+    private function rememberCommand(Command $command): void
+    {
+        $this->_lastCommand = $command;
+        $resource = Arr::isNotEmpty($command->resources) ? $command->resources[0] : null;
+        $this->_lastResource = Val::isNotEmpty($resource) ? (string)$resource : null;
+    }
+
+    private function resultForOutput(mixed $output, array $metadata = []): CommandResult
+    {
+        if ($this->_confirmationRequired || Val::is($this->_storage->confirmCmd ?? null)) {
+            return CommandResult::pending(
+                $output,
+                $this->_lastCommand,
+                $this->continuationToken(),
+                $metadata
+            );
+        }
+
+        return CommandResult::completed($output, $this->_lastCommand, $metadata);
+    }
+
+    private function continuationToken(): string
+    {
+        $token = $this->_storage->confirmToken ?? null;
+        if (Str::isNotEmpty((string)$token)) {
+            return (string)$token;
+        }
+
+        $token = Str::uuid4();
+        $this->_storage->confirmToken = $token;
+        $this->_storage->write();
+
+        return $token;
+    }
+
+    private function resume(CommandRequest $request): CommandResult
+    {
+        $token = (string)$request->continuationToken();
+        $consumed = Arr::is($this->_storage->consumedContinuations ?? null)
+            ? $this->_storage->consumedContinuations
+            : [];
+
+        if (Arr::has($consumed, $token, true)) {
+            return CommandResult::invalid(
+                'Command continuation has already been consumed.',
+                ['continuation_consumed'],
+                $request->context()
+            );
+        }
+
+        $expected = (string)($this->_storage->confirmToken ?? '');
+        if (Str::isEmpty($expected) || !Str::match($expected, $token)) {
+            return CommandResult::invalid(
+                'Command continuation is invalid.',
+                ['continuation_invalid'],
+                $request->context()
+            );
+        }
+
+        $consumed[] = $token;
+        $consumed = Arr::make($consumed)->slice(-50)->toArray();
+        $this->_storage->consumedContinuations = $consumed;
+        unset($this->_storage->confirmToken);
+        $this->_storage->write();
+
+        $output = $this->handle($request->approved() ? 'yes' : 'no');
+        return $this->resultForOutput($output, $request->context());
     }
 
     public function suggestCommands($input, &$cmd)
@@ -327,6 +483,7 @@ class CommandProcessor
 
         if ($highestSimilarity > 75) {
             $this->_storage->confirmCmd = $bestMatch;
+            $this->_confirmationRequired = true;
             unset($this->_storage->currentCmd);
             $this->_storage->write();
             $args = '';
@@ -524,7 +681,7 @@ class CommandProcessor
     private function resourceExists(string $resource): bool
     {
         $abilities = $this->_app->getAbilities();
-        return isset($abilities[$resource]);
+        return Arr::hasKey($abilities, $resource);
     }
 
     private function shouldUseNavigator(string $input): bool
