@@ -5,6 +5,8 @@ namespace BlueFission\Tests;
 use BlueFission\Wise\Cmd\CommandHandler;
 use BlueFission\Wise\Arc\Kernel;
 use BlueFission\Wise\Usr\Profile;
+use BlueFission\Wise\Exe\BridgeResult;
+use BlueFission\Wise\Exe\ExecutionRequest;
 use PHPUnit\Framework\TestCase;
 
 final class CommandHandlerTest extends TestCase
@@ -97,6 +99,23 @@ final class CommandHandlerTest extends TestCase
         $this->assertSame('Insufficient permissions to modify global memory.', $result);
         $this->assertNull($kernel->memoryMax['global']);
     }
+
+    public function testRunCommandBuildsStructuredExecutionRequest(): void
+    {
+        $kernel = new FakeKernel();
+        $handler = new CommandHandler($kernel);
+
+        $result = $handler->handle(
+            'run demo.jss --arg=one --env=SAFE=yes --cap=environment --timeout=25'
+        );
+
+        $this->assertSame('executed', $result);
+        $this->assertSame('demo.jss', $kernel->executionRequest?->path());
+        $this->assertSame(['one'], $kernel->executionRequest?->arguments());
+        $this->assertSame(['SAFE' => 'yes'], $kernel->executionRequest?->environment());
+        $this->assertSame([ExecutionRequest::CAP_ENVIRONMENT], $kernel->executionRequest?->capabilities());
+        $this->assertSame(25, $kernel->executionRequest?->timeoutMs());
+    }
 }
 
 final class FakeKernel extends Kernel
@@ -104,6 +123,7 @@ final class FakeKernel extends Kernel
     public array $lastCall = [];
     public array $memoryMax = ['user' => null, 'global' => null];
     public bool $workingMemoryEnabled = true;
+    public ?ExecutionRequest $executionRequest = null;
     private Profile $profile;
 
     public function __construct()
@@ -189,5 +209,11 @@ final class FakeKernel extends Kernel
     public function setProfile(Profile $profile): void
     {
         $this->profile = $profile;
+    }
+
+    public function executeScript(ExecutionRequest $request): BridgeResult
+    {
+        $this->executionRequest = $request;
+        return BridgeResult::success('executed');
     }
 }

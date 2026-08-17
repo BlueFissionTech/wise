@@ -2,6 +2,7 @@
 
 namespace BlueFission\Wise\Exe;
 
+use BlueFission\Arr;
 use BlueFission\Behavioral\Behaviors\Event;
 use BlueFission\Behavioral\Behaviors\Meta;
 use BlueFission\Obj;
@@ -24,13 +25,10 @@ class BridgeRegistry extends Obj
     {
         $extensions = [];
         foreach ($this->bridges as $bridge) {
-            $extensions = array_merge($extensions, $bridge->extensions());
+            $extensions = Arr::merge($extensions, $bridge->extensions());
         }
 
-        $extensions = array_values(array_unique($extensions));
-        sort($extensions);
-
-        return $extensions;
+        return Arr::make($extensions)->unique()->values()->sort()->toArray();
     }
 
     public function bridgeForFile(string $path): ?IBridge
@@ -60,6 +58,18 @@ class BridgeRegistry extends Obj
         ], src: $this));
 
         return $result;
+    }
+
+    public function execute(ExecutionRequest $request, BridgeContext $context): BridgeResult
+    {
+        $bridge = $this->bridgeForFile($request->path());
+        if (!$bridge instanceof IExecutingBridge) {
+            return BridgeResult::failure('No executing bridge registered for file: ' . $request->path(), [
+                'execution' => $request->metadata(),
+            ]);
+        }
+
+        return $bridge->execute($request, $context);
     }
 
     public function validateFile(string $path, BridgeContext $context): BridgeResult
