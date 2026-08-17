@@ -3,13 +3,11 @@
 namespace BlueFission\Wise\Nav;
 
 use BlueFission\SynthetIQ\SynthetIQ;
-use BlueFission\SynthetIQ\Intents\IntelligenceRouter;
-use BlueFission\SynthetIQ\Intents\Classifier as SynthetiqIntentClassifier;
 use BlueFission\SynthetIQ\Memory\MemoryAdapterInterface;
+use BlueFission\SynthetIQ\Training\RouteTrainer;
 use BlueFission\Automata\Language\{Interpreter, Grammar, StemmerLemmatizer, Walker};
 use BlueFission\Automata\Analysis\KeywordTopicAnalyzer;
 use BlueFission\Automata\Strategy\NaiveBayesTextClassification;
-use BlueFission\Automata\Context;
 use BlueFission\Arr;
 use BlueFission\Str;
 use BlueFission\Wise\Sys\DirectoryManager;
@@ -96,32 +94,49 @@ class SynthetiqBootstrap
 
         self::emitProgress($progress, 'analyzer', 'Preparing intent analyzer...');
         $analyzer = new KeywordTopicAnalyzer(new NaiveBayesTextClassification, $modelDir);
+        $intentModelPath = $modelDir . 'intent_naive_bayes.phpml';
+        $routeStatePath = $modelDir . 'route_training_state.json';
+        $routeExtra = [
+            'grammar' => $grammar,
+            'tokens' => $tokens,
+            'routes' => $config['routes'] ?? [],
+            'intent_keywords' => $config['intent_keywords'] ?? [],
+        ];
+
         try {
-            $ai = new SynthetIQ($interpreter, $analyzer);
+            $ai = new SynthetIQ(
+                $interpreter,
+                $analyzer,
+                routerOptions: [
+                    'naive_bayes' => [
+                        'model_path' => $intentModelPath,
+                        'cache_dir' => $modelDir,
+                        'cache_key' => RouteTrainer::cacheKey($dialogue, $intentBoosts, $routeExtra),
+                    ],
+                ]
+            );
         } catch (\Throwable $e) {
             throw new \RuntimeException('Synthetiq runtime is unavailable: ' . $e->getMessage(), 0, $e);
         }
-        self::stabilizePredictors($ai);
 
         $memoryAdapter = $config['memory_adapter'] ?? null;
         if ($memoryAdapter instanceof MemoryAdapterInterface) {
             $ai->setMemoryAdapter($memoryAdapter);
         }
 
-        $intentModelPath = $modelDir . 'intent_naive_bayes.phpml';
-        $cacheKey = self::buildIntentCacheKey($dialogue, $intentBoosts, $config);
-        self::configureIntentRouter($ai, [
-            'naive_bayes' => [
-                'model_path' => $intentModelPath,
-                'cache_dir' => $modelDir,
-                'cache_key' => $cacheKey,
-            ],
-        ]);
-
-        $intentCacheHit = FileSystemManager::pathExists($intentModelPath);
-        self::emitProgress($progress, 'routes', 'Training intent routes...', ['cache' => $intentCacheHit]);
-        self::trainRoutes($ai, $dialogue, $intentBoosts, $progress);
-        self::warmIntentRouter($ai);
+        [$routeState, $routeCacheHit] = self::routeState(
+            $routeStatePath,
+            $dialogue,
+            $intentBoosts,
+            $routeExtra
+        );
+        self::emitProgress(
+            $progress,
+            'routes',
+            $routeCacheHit ? 'Loading cached intent routes...' : 'Training intent routes...',
+            ['cache' => $routeCacheHit, 'cache_key' => $routeState['cache_key']]
+        );
+        RouteTrainer::apply($ai, $routeState, self::routeProgress($progress, $routeCacheHit));
 
         self::emitProgress($progress, 'finalize', 'Finalizing navigator...');
         $proxy = new SynthetiqProxy($ai);
@@ -150,73 +165,45 @@ class SynthetiqBootstrap
         return $proxy;
     }
 
-    private static function trainRoutes(SynthetIQ $ai, array $dialogue, array $intentBoosts = [], ?callable $progress = null): void
+    private static function routeState(
+        string $path,
+        array $dialogue,
+        array $intentBoosts,
+        array $extra
+    ): array
     {
-        $stopwords = ['how', 'what', 'is', 'the', 'a', 'an', 'to', 'for', 'on', 'in'];
-        $total = 0;
-        foreach ($dialogue as $info) {
-            $phrases = $info[1] ?? [];
-            $total += 1;
-            if (is_array($phrases)) {
-                $total += count($phrases);
-            }
-        }
-        $current = 0;
-        $emitProgress = function () use ($progress, &$current, $total) {
-            if (!$progress || $total <= 0) {
-                return;
-            }
-
-            self::emitProgress($progress, 'routes', 'Training intent routes...', [
-                'sub_current' => $current,
-                'sub_total' => $total,
-            ]);
-        };
-
-        foreach ($dialogue as $category => $info) {
-            $current++;
-            $boost = $intentBoosts[$category] ?? [];
-            $keywords = $info[2] ?? [];
-            if (!empty($boost['keywords'])) {
-                $keywords = array_merge($keywords, $boost['keywords']);
-            }
-            $exclude = $boost['exclude'] ?? [];
-            $keywords = self::normalizeKeywords($keywords, array_merge($stopwords, $exclude));
-            $priorityBase = $boost['priority'] ?? null;
-            $ai->addIntentKeywords($category, $keywords, $priorityBase);
-            if ($current % 10 === 0 || $current === $total) {
-                $emitProgress();
-            }
-
-            foreach ($info[1] as $statement) {
-                $ai->addRoute($statement, $category, $info[0]);
-                $current++;
-                if ($current % 10 === 0 || $current === $total) {
-                    $emitProgress();
+        if (FileSystemManager::pathExists($path)) {
+            try {
+                $state = RouteTrainer::loadState($path);
+                if (RouteTrainer::stateMatches($state, $dialogue, $intentBoosts, $extra)) {
+                    return [$state, true];
                 }
+            } catch (\Throwable $e) {
+                // A stale or partial cache is rebuilt from the configured source data.
             }
         }
 
-        $emitProgress();
+        $state = RouteTrainer::compile($dialogue, $intentBoosts, $extra);
+        RouteTrainer::saveState($state, $path);
+
+        return [$state, false];
     }
 
-    private static function normalizeKeywords(array $keywords, array $exclude = []): array
+    private static function routeProgress(?callable $progress, bool $cacheHit): ?callable
     {
-        $excludeSet = [];
-        foreach ($exclude as $value) {
-            $excludeSet[strtolower(trim((string)$value))] = true;
+        if (!$progress) {
+            return null;
         }
 
-        $normalized = [];
-        foreach ($keywords as $keyword) {
-            $keyword = strtolower(trim((string)$keyword));
-            if ($keyword === '' || isset($excludeSet[$keyword])) {
-                continue;
-            }
-            $normalized[$keyword] = true;
-        }
-
-        return array_keys($normalized);
+        return static function (array $event) use ($progress, $cacheHit): void {
+            self::emitProgress($progress, 'routes', 'Preparing intent routes...', [
+                'cache' => $cacheHit,
+                'sub_stage' => $event['stage'] ?? null,
+                'sub_current' => $event['current'] ?? 0,
+                'sub_total' => $event['total'] ?? 0,
+                'intent' => $event['intent'] ?? null,
+            ]);
+        };
     }
 
     private static function resolveModelPath(string $modelDir, string $analyzerClass): string
@@ -236,172 +223,4 @@ class SynthetiqBootstrap
         $progress($stage, $message, $payload);
     }
 
-    private static function buildIntentCacheKey(array $dialogue, array $intentBoosts, array $config): string
-    {
-        $payload = [
-            'dialogue' => $dialogue,
-            'intent_boosts' => $intentBoosts,
-            'grammar' => $config['grammar'] ?? [],
-            'tokens' => $config['tokens'] ?? [],
-            'routes' => $config['routes'] ?? [],
-            'intent_keywords' => $config['intent_keywords'] ?? [],
-        ];
-
-        $normalized = self::normalizeCachePayload($payload);
-        return sha1(json_encode($normalized));
-    }
-
-    private static function normalizeCachePayload($value)
-    {
-        if (!is_array($value)) {
-            return $value;
-        }
-
-        $isAssoc = array_keys($value) !== range(0, count($value) - 1);
-        if ($isAssoc) {
-            ksort($value);
-        }
-
-        $normalized = [];
-        foreach ($value as $key => $item) {
-            $normalized[$key] = self::normalizeCachePayload($item);
-        }
-
-        return $normalized;
-    }
-
-    private static function configureIntentRouter(SynthetIQ $ai, array $options): void
-    {
-        $matcher = self::readProtectedProperty($ai, '_matcher');
-        if (!$matcher) {
-            return;
-        }
-
-        $analyzer = self::readProtectedProperty($matcher, '_intentAnalyzer');
-        if (!$analyzer) {
-            return;
-        }
-
-        $router = null;
-        if (class_exists(IntelligenceRouter::class)) {
-            $router = new IntelligenceRouter($analyzer, $matcher, $options);
-        } elseif (class_exists(SynthetiqIntentClassifier::class)) {
-            $router = new SynthetiqIntentClassifier($analyzer);
-            self::writeProtectedProperty($router, '_matcher', $matcher);
-        }
-
-        if (!$router) {
-            return;
-        }
-
-        self::writeProtectedProperty($ai, '_intentClassifier', $router);
-    }
-
-    private static function warmIntentRouter(SynthetIQ $ai): void
-    {
-        $router = self::readProtectedProperty($ai, '_intentClassifier');
-        if (!$router) {
-            return;
-        }
-
-        try {
-            $router->score('bootstrap', new Context());
-        } catch (\Throwable $e) {
-            // ignore warmup errors; they will surface on real input
-        }
-    }
-
-    private static function stabilizePredictors(SynthetIQ $ai): void
-    {
-        $predictor = self::readProtectedProperty($ai, '_predictor');
-        if (!is_object($predictor) || self::predictorWorks($predictor)) {
-            return;
-        }
-
-        $safePredictor = self::nullPredictor();
-        self::writeProtectedProperty($ai, '_predictor', $safePredictor);
-        self::writeProtectedProperty($ai, '_learningModel', null);
-
-        $selector = self::readProtectedProperty($ai, '_responseSelector');
-        if (is_object($selector)) {
-            self::writeProtectedProperty($selector, '_predictor', $safePredictor);
-        }
-    }
-
-    private static function predictorWorks(object $predictor): bool
-    {
-        if (!method_exists($predictor, 'addSentence')) {
-            return true;
-        }
-
-        try {
-            $class = get_class($predictor);
-            $probe = new $class();
-            $probe->addSentence('wise bootstrap predictor probe');
-
-            if (method_exists($probe, 'predictNextWords')) {
-                $probe->predictNextWords('wise');
-            } elseif (method_exists($probe, 'predictNextWord')) {
-                $probe->predictNextWord('wise');
-            }
-
-            return true;
-        } catch (\Throwable $e) {
-            return false;
-        }
-    }
-
-    private static function nullPredictor(): object
-    {
-        return new class {
-            public function addSentence(string $sentence): void
-            {
-            }
-
-            public function predictBeginning(): string
-            {
-                return '';
-            }
-
-            public function predictNextWords(string $input): array
-            {
-                return [];
-            }
-
-            public function predictNextWord(string $input): ?string
-            {
-                return null;
-            }
-        };
-    }
-
-    private static function readProtectedProperty(object $object, string $property)
-    {
-        try {
-            $reflection = new \ReflectionObject($object);
-            if (!$reflection->hasProperty($property)) {
-                return null;
-            }
-            $prop = $reflection->getProperty($property);
-            $prop->setAccessible(true);
-            return $prop->getValue($object);
-        } catch (\Throwable $e) {
-            return null;
-        }
-    }
-
-    private static function writeProtectedProperty(object $object, string $property, $value): void
-    {
-        try {
-            $reflection = new \ReflectionObject($object);
-            if (!$reflection->hasProperty($property)) {
-                return;
-            }
-            $prop = $reflection->getProperty($property);
-            $prop->setAccessible(true);
-            $prop->setValue($object, $value);
-        } catch (\Throwable $e) {
-            return;
-        }
-    }
 }
