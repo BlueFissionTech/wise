@@ -11,7 +11,7 @@ use BlueFission\Val;
 use BlueFission\Wise\Sys\DirectoryManager;
 use BlueFission\Wise\Sys\FileSystemManager;
 
-class JenssBridge extends Obj implements IBridge, IValidatingBridge
+class JenssBridge extends Obj implements IBridge, IValidatingBridge, IExecutingBridge
 {
     private const JENERATOR_PARSER = \BlueFission\Jenerator\Parsing\JenssParser::class;
     private const JENERATOR_INTERPRETER = \BlueFission\Jenerator\Runtime\Interpreter::class;
@@ -77,6 +77,36 @@ class JenssBridge extends Obj implements IBridge, IValidatingBridge
                 'exception' => $e::class,
             ]);
         }
+    }
+
+    public function execute(ExecutionRequest $request, BridgeContext $context): BridgeResult
+    {
+        if ($request->isCancelled()) {
+            return BridgeResult::failure('JenSS execution cancelled.', [
+                'execution' => $request->metadata(),
+                'cancelled' => true,
+            ]);
+        }
+
+        if ($request->hasTimedOut()) {
+            return BridgeResult::failure('JenSS execution timed out.', [
+                'execution' => $request->metadata(),
+                'timed_out' => true,
+            ]);
+        }
+
+        $result = $this->runFile($request->path(), $request->scopedContext($context));
+        $meta = Arr::merge($result->meta(), ['execution' => $request->metadata()]);
+
+        if ($request->isCancelled()) {
+            return BridgeResult::failure('JenSS execution cancelled.', Arr::merge($meta, ['cancelled' => true]));
+        }
+
+        if ($request->hasTimedOut()) {
+            return BridgeResult::failure('JenSS execution timed out.', Arr::merge($meta, ['timed_out' => true]));
+        }
+
+        return new BridgeResult($result->successFlag(), $result->output(), $meta);
     }
 
     public function validateFile(string $path, BridgeContext $context): BridgeResult

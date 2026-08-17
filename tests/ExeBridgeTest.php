@@ -6,6 +6,7 @@ use BlueFission\Wise\Exe\BridgeContext;
 use BlueFission\Wise\Exe\BridgeRegistry;
 use BlueFission\Wise\Exe\JenssBridge;
 use BlueFission\Wise\Exe\VibeBridge;
+use BlueFission\Wise\Exe\ExecutionRequest;
 use PHPUnit\Framework\TestCase;
 
 final class ExeBridgeTest extends TestCase
@@ -87,6 +88,33 @@ final class ExeBridgeTest extends TestCase
         $this->assertTrue($result->successFlag());
         $this->assertSame('Script is valid.', $result->output());
         $this->assertSame('validate', $result->meta()['mode'] ?? null);
+    }
+
+    public function testJenssBridgeExecutesStructuredRequest(): void
+    {
+        if (!class_exists(\BlueFission\Jenerator\Runtime\Interpreter::class)) {
+            $this->markTestSkipped('JenSS interpreter not available.');
+        }
+
+        $path = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'examples'
+            . DIRECTORY_SEPARATOR . 'root' . DIRECTORY_SEPARATOR . 'cmd'
+            . DIRECTORY_SEPARATOR . 'hello.jss';
+        $request = new ExecutionRequest(
+            $path,
+            ['one'],
+            dirname($path),
+            'input',
+            ['SAFE' => 'yes'],
+            [ExecutionRequest::CAP_FILESYSTEM, ExecutionRequest::CAP_ENVIRONMENT],
+            5000
+        );
+
+        $result = (new JenssBridge())->execute($request, new BridgeContext());
+
+        $this->assertTrue($result->successFlag());
+        $this->assertStringContainsString('Hello from Wise.', $result->output());
+        $this->assertSame(['one'], $result->meta()['execution']['args']);
+        $this->assertSame(['SAFE'], $result->meta()['execution']['env_keys']);
     }
 
     public function testRegistryRejectsValidationForExecutionOnlyBridge(): void

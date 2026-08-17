@@ -60,6 +60,18 @@ class BridgeRegistry extends Obj
         return $result;
     }
 
+    public function execute(ExecutionRequest $request, BridgeContext $context): BridgeResult
+    {
+        $bridge = $this->bridgeForFile($request->path());
+        if (!$bridge instanceof IExecutingBridge) {
+            return BridgeResult::failure('No executing bridge registered for file: ' . $request->path(), [
+                'execution' => $request->metadata(),
+            ]);
+        }
+
+        return $bridge->execute($request, $context);
+    }
+
     public function validateFile(string $path, BridgeContext $context): BridgeResult
     {
         $this->dispatch(Event::STARTED, new Meta(data: [
