@@ -250,7 +250,7 @@ class Kernel {
             return $response ?? "Invalid command.";
         }
 
-        $resourceObj = App::instance()->resolve($resource);
+        $resourceObj = $this->registeredResource($resource);
 
         if (! $resourceObj) {
             return "Resource not found.";
@@ -259,6 +259,17 @@ class Kernel {
         $process = $this->_processManager->createProcess($resourceObj, $command);
 
         return $response;
+    }
+
+    private function registeredResource(string $resource): ?object
+    {
+        try {
+            $service = App::instance()->service($resource);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return Val::make($service)->check('is_object') ? $service : null;
     }
 
     public function handleScript($request) {
@@ -601,7 +612,7 @@ class Kernel {
                 $resourceName = substr($path, strlen('wise.resource.'));
             }
 
-            $resource = $resourceName !== '' ? App::instance()->resolve($resourceName) : null;
+            $resource = $resourceName !== '' ? $this->registeredResource($resourceName) : null;
 
             return [
                 'key' => $key,
