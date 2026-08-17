@@ -2,9 +2,11 @@
 
 namespace BlueFission\Wise\Res;
 
+use BlueFission\Arr;
 use BlueFission\Behavioral\Behaviors\Behavior;
 use BlueFission\Behavioral\Behaviors\Meta;
 use BlueFission\Obj;
+use BlueFission\Val;
 
 class ScriptedResource extends Obj
 {
@@ -37,13 +39,13 @@ class ScriptedResource extends Obj
     private function normalizeArgs($args): array
     {
         if ($args instanceof Meta) {
-            return is_array($args->data) ? $args->data : [];
+            return Arr::is($args->data) ? $args->data : [];
         }
 
-        if ($args === null) {
+        if (Val::isNull($args)) {
             return [];
         }
 
-        return is_array($args) ? $args : [$args];
+        return Arr::is($args) ? $args : [$args];
     }
 }

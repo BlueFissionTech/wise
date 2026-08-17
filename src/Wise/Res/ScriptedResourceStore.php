@@ -2,14 +2,16 @@
 
 namespace BlueFission\Wise\Res;
 
+use BlueFission\Arr;
 use BlueFission\Obj;
+use BlueFission\Val;
 
 class ScriptedResourceStore extends Obj
 {
     public function list(string $resource): array
     {
         $entries = store("_system.{$resource}.list");
-        return is_array($entries) ? $entries : [];
+        return Arr::is($entries) ? $entries : [];
     }
 
     public function save(string $resource, array $entries): void
@@ -20,13 +22,13 @@ class ScriptedResourceStore extends Obj
     public function get(string $resource, string $id): ?array
     {
         $entries = $this->list($resource);
-        return $entries[$id] ?? null;
+        return Val::is($entries[$id] ?? null) ? $entries[$id] : null;
     }
 
     public function add(string $resource, array $entry): array
     {
         $entries = $this->list($resource);
-        $id = $entry['id'] ?? count($entries);
+        $id = Val::is($entry['id'] ?? null) ? $entry['id'] : Arr::size($entries);
         $entries[$id] = $entry;
         $this->save($resource, $entries);
 

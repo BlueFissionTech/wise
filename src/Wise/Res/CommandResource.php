@@ -1,6 +1,7 @@
 <?php
 namespace BlueFission\Wise\Res;
 
+use BlueFission\Arr;
 use BlueFission\Services\Service;
 use BlueFission\BlueCore\Command\CommandProcessor;
 
@@ -27,8 +28,8 @@ class CommandResource extends Service {
 
 	public function list($behavior, $args)
 	{
-		$page = count($args) >= 1 ? (int)$args[0] : $this->_page;
-        if (count($args) >= 2) {
+		$page = Arr::size($args) >= 1 ? (int)$args[0] : $this->_page;
+        if (Arr::size($args) >= 2) {
             $this->_perPage = (int)$args[0];
             $page = (int)$args[1];
         }
@@ -42,7 +43,7 @@ class CommandResource extends Service {
                 $this->_perPage = 25;
             }
 
-            $total = count($commands);
+            $total = Arr::size($commands);
             $totalPages = ceil($total / $this->_perPage);
 
             if ($page < 1) {
@@ -80,7 +81,7 @@ class CommandResource extends Service {
 
 	public function next($behavior, $args)
     {
-        $perPage = count($args) >= 1 ? (int)$args[0] : $this->_perPage;
+        $perPage = Arr::size($args) >= 1 ? (int)$args[0] : $this->_perPage;
 
         if ($perPage !== null) {
             $this->_perPage = $perPage;
@@ -92,7 +93,7 @@ class CommandResource extends Service {
 
     public function previous($behavior, $args)
     {
-        $perPage = count($args) >= 1 ? (int)$args[0] : $this->_perPage;
+        $perPage = Arr::size($args) >= 1 ? (int)$args[0] : $this->_perPage;
 
         if ($perPage !== null) {
             $this->_perPage = $perPage;
