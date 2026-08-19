@@ -2,9 +2,12 @@
 
 namespace BlueFission\Tests\Res;
 
-use BlueFission\Wise\Commands\FileResource;
+use BlueFission\Services\Application as App;
+use BlueFission\Str;
+use BlueFission\Wise\Commands\FileResource as LegacyFileResource;
 use BlueFission\Wise\Res\ActionResource;
 use BlueFission\Wise\Res\APIResource;
+use BlueFission\Wise\Res\FileResource;
 use BlueFission\Wise\Res\NoteResource;
 use BlueFission\Wise\Res\ScheduleResource;
 use BlueFission\Wise\Res\StepResource;
@@ -15,6 +18,7 @@ use BlueFission\Wise\Sys\StorageRoot;
 use BlueFission\Val;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 use ReflectionProperty;
 
 class ResourceStorageRootTest extends TestCase
@@ -71,6 +75,44 @@ class ResourceStorageRootTest extends TestCase
             'todo' => [TodoResource::class, 'system', '_storage'],
             'variable' => [VariableResource::class, 'system', '_storage'],
         ];
+    }
+
+    public function testCanonicalFileResourceLoadsFromItsPsr4Path(): void
+    {
+        $reflection = new ReflectionClass(FileResource::class);
+        $path = Str::make((string)$reflection->getFileName())
+            ->replace('\\', '/')
+            ->val();
+
+        $this->assertSame(FileResource::class, $reflection->getName());
+        $this->assertStringEndsWith('/src/Wise/Res/FileResource.php', $path);
+    }
+
+    public function testLegacyFileResourceUsesItsOwnCompatibilityPath(): void
+    {
+        $reflection = new ReflectionClass(LegacyFileResource::class);
+        $path = Str::make((string)$reflection->getFileName())
+            ->replace('\\', '/')
+            ->val();
+
+        $this->assertTrue($reflection->isSubclassOf(FileResource::class));
+        $this->assertStringEndsWith('/src/Wise/Commands/FileResource.php', $path);
+    }
+
+    public function testCanonicalFileResourceResolvesThroughApplicationDelegation(): void
+    {
+        $serviceName = Str::make('file-resource-')
+            ->append(Str::make()->rand()->val())
+            ->val();
+        $storageRoot = new StorageRoot($this->root);
+
+        App::instance()->delegate($serviceName, FileResource::class, [$storageRoot]);
+        $resource = App::instance()->service($serviceName);
+
+        $this->assertInstanceOf(FileResource::class, $resource);
+        $this->assertTrue(DirectoryManager::pathExists(
+            $this->root . DIRECTORY_SEPARATOR . 'files'
+        ));
     }
 
     private function removeDirectory(string $path): void

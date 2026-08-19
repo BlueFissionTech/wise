@@ -61,6 +61,9 @@ jobs:
           export COMPOSER_AUTH="{\"github-oauth\":{\"github.com\":\"${GH_REPO_TOKEN}\"}}"
           composer install --no-interaction --no-progress --prefer-dist
 
+      - name: Verify authoritative PSR-4 autoloading
+        run: composer dump-autoload --classmap-authoritative --strict-psr
+
       - name: Check platform requirements
         run: composer check-platform-reqs
 

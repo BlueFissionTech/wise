@@ -1,5 +1,6 @@
 <?php
-namespace BlueFission\Wise\Commands;
+
+namespace BlueFission\Wise\Res;
 
 use BlueFission\Services\Service;
 use BlueFission\Data\FileSystem;
