@@ -5,8 +5,6 @@ namespace BlueFission\Tests;
 use BlueFission\Services\Application as App;
 use BlueFission\Wise\Cmd\CommandParser;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\PreserveGlobalState;
-use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 
 final class CommandParserTest extends TestCase
@@ -94,8 +92,6 @@ final class CommandParserTest extends TestCase
         ];
     }
 
-    #[RunInSeparateProcess]
-    #[PreserveGlobalState(false)]
     public function testSeparatedAliasResolvesRegisteredServiceName(): void
     {
         App::instance()->register('parser_test_resource', 'list', fn (): null => null);
