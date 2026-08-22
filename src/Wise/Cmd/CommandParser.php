@@ -4,6 +4,7 @@ namespace BlueFission\Wise\Cmd;
 use BlueFission\Services\Application as App;
 use BlueFission\Arr;
 use BlueFission\Str;
+use BlueFission\Val;
 
 // CommandParser.php
 class CommandParser
@@ -224,64 +225,75 @@ class CommandParser
     protected function parseResourcesAndArgs($input, Command $command)
     {
         preg_match_all('/\s*(?:(?:"([^"]*)")|([^\s"]+))/', $input, $matches, PREG_SET_ORDER);
-        $words = [];
-        $areLiterals = [];
+        $words = Arr::make();
+        $areLiterals = Arr::make();
         foreach ($matches as $match) {
-            $areLiterals[] = !isset($match[2]);
-            $words[] = isset($match[2]) ? $match[2] : $match[1];
+            $hasUnquotedValue = Val::is($match[2] ?? null);
+            $areLiterals->push(!$hasUnquotedValue);
+            $words->push($hasUnquotedValue ? $match[2] : $match[1]);
         }
 
-        $resources = [];
-        $args = [];
-        $currentArg = [];
+        $resources = Arr::make();
+        $args = Arr::make();
+        $currentArg = Arr::make();
+        $hasKnownResource = false;
 
-        $i = -1;
-        foreach ($words as $word) {
-            $i++;
-            if (in_array($word, $this->prepositions) && !$areLiterals[$i]) {
-                if ($currentArg) {
-                    $arg = implode(' ', $currentArg);
-                    $args[] = $arg;
-                    $currentArg = [];
-                }
-                continue;
+        $words->each(function ($candidate, $index) use ($areLiterals, &$hasKnownResource): void {
+            if (!$areLiterals[$index] && $this->isResource($candidate)) {
+                $hasKnownResource = true;
+            }
+        });
+
+        $flushArgument = function () use ($args, $currentArg): void {
+            if (Arr::isEmpty($currentArg->val())) {
+                return;
             }
 
-            if (in_array($word, $this->noiseWords) && !$areLiterals[$i]) {
-                if ($currentArg) {
-                    $arg = implode(' ', $currentArg);
-                    $args[] = $arg;
-                    $currentArg = [];
-                }
-                continue;
+            $args->push($currentArg->join(' ')->val());
+            $currentArg->val([]);
+        };
+
+        $words->each(function ($word, $index) use (
+            $areLiterals,
+            $resources,
+            $args,
+            $currentArg,
+            $flushArgument,
+            $hasKnownResource
+        ): void {
+            $isLiteral = (bool)$areLiterals[$index];
+            if (!$isLiteral && (
+                Arr::has($this->prepositions, $word, true)
+                || Arr::has($this->noiseWords, $word, true)
+            )) {
+                $flushArgument();
+                return;
             }
 
-            if ($this->isResource($word) && !$areLiterals[$i]) {
-                if ($currentArg) {
-                    $arg = implode(' ', $currentArg);
-                    $args[] = $arg;
-                    $currentArg = [];
-                }
-                $resources[] = $this->normalizeResource($word);
-            } elseif ($areLiterals[$i]) {
-                if ( count($currentArg) > 0) {
-                    $arg = implode(' ', $currentArg);
-                    $args[] = $arg;
-                    $currentArg = [];
-                }
-                $args[] = $word;
+            $normalizedResource = $this->normalizeResource($word);
+            if (!$isLiteral && $this->isResource($word)) {
+                $flushArgument();
+                $resources->push($normalizedResource);
+            } elseif (
+                !$isLiteral
+                && !$hasKnownResource
+                && Arr::isEmpty($resources->val())
+                && Arr::isEmpty($currentArg->val())
+                && $this->isResourceIdentifier($normalizedResource)
+            ) {
+                $resources->push($normalizedResource);
+            } elseif ($isLiteral) {
+                $flushArgument();
+                $args->push($word);
             } else {
-                $currentArg[] = $word;
+                $currentArg->push($word);
             }
-        }
+        });
 
-        if ($currentArg) {
-            $arg = implode(' ', $currentArg);
-            $args[] = $arg;
-        }
+        $flushArgument();
 
-        $command->resources = $resources;
-        $command->args = $args;
+        $command->resources = $resources->val();
+        $command->args = $args->val();
     }
 
     protected function processInput($input)
@@ -350,15 +362,15 @@ class CommandParser
     protected function isResource($word)
     {
         $word = $this->normalizeResource($word);
-        return in_array($word, $this->availableResources(), true);
+        return Arr::has($this->availableResources(), $word, true);
     }
 
     protected function normalizeResource($word)
     {
-        $word = strtolower($word);
+        $word = Str::make((string)$word)->lower()->val();
 
         // Remove noise words
-        if (in_array($word, $this->noiseWords)) {
+        if (Arr::has($this->noiseWords, $word, true)) {
             return null;
         }
 
@@ -366,9 +378,12 @@ class CommandParser
         // if (substr($word, -1) === 's' && in_array(substr($word, 0, -1), $this->knownResources)) {
         //     $word = substr($word, 0, -1);
         // }
+        $word = $this->normalizeResourceIdentifier($word);
         foreach ($this->availableResources() as $resource)
         {
-            if ($word == Str::pluralize($resource)) {
+            $canonical = $this->normalizeResourceIdentifier((string)$resource);
+            $plural = $this->normalizeResourceIdentifier(Str::pluralize((string)$resource));
+            if ($word === $canonical || $word === $plural) {
                 $word = $resource;
                 break;
             }
@@ -381,13 +396,37 @@ class CommandParser
         $word = preg_replace('/\s+/', ' ', $word); // Collapse multiple spaces
         $word = trim($word); // Trim spaces at the beginning and end
 
-        if (isset($this->quotedPlaceholders[$word])) {
+        if (Val::is($this->quotedPlaceholders[$word] ?? null)) {
             $word = $this->quotedPlaceholders[$word];
         }
 
         $word = $this->processResource($word);
 
         return $word;
+    }
+
+    protected function isResourceIdentifier(?string $word): bool
+    {
+        if (Str::isEmpty((string)$word)) {
+            return false;
+        }
+
+        return Str::make((string)$word)->matches('/^[a-z0-9]+(?:-[a-z0-9]+)+$/');
+    }
+
+    protected function normalizeResourceIdentifier(string $word): string
+    {
+        $candidate = Str::make($word)
+            ->trim()
+            ->lower()
+            ->replace('_', '-')
+            ->replacePattern('/-+/', '-')
+            ->trim('-')
+            ->val();
+
+        return Str::make($candidate)->matches('/^[a-z0-9]+(?:-[a-z0-9]+)*$/')
+            ? $candidate
+            : $word;
     }
 
     /**

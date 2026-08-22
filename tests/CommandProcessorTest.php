@@ -28,6 +28,17 @@ final class CommandProcessorTest extends TestCase
         $this->assertSame('Resource not found', $result);
     }
 
+    public function testRepeatedSeparatedResourceIdentifierStaysComplete(): void
+    {
+        $processor = new CommandProcessor($this->makeStorage());
+
+        $first = $processor->handle('list missing-resource');
+        $second = $processor->handle('list missing-resource');
+
+        $this->assertSame('Resource not found', $first);
+        $this->assertSame('Resource not found', $second);
+    }
+
     public function testMissingResourcePromptsForResource(): void
     {
         $processor = new CommandProcessor($this->makeStorage());
