@@ -107,6 +107,63 @@ final class AuthProviderTest extends TestCase
         $this->assertSame('guest', $identity->profile()->id());
     }
 
+    public function testPresenceLogoutInvokesRevocationAndClearsLocalIdentity(): void
+    {
+        $revokedProfile = null;
+        $registry = new FakePresenceRegistry(FakePresenceResult::success(
+            new FakePresencePrincipal(
+                'user-42',
+                new FakePresenceCollection(['operator']),
+                new FakePresenceCollection(['resource.read'])
+            )
+        ));
+        $provider = new PresenceAuthProvider(
+            $registry,
+            static fn (AuthRequest $request): object => (object)['secret' => $request->secret()],
+            static fn (): object => (object)[],
+            static function ($outcome) use (&$revokedProfile): void {
+                $revokedProfile = $outcome->profile()?->id();
+            }
+        );
+        $provider->authenticate(new AuthRequest('alex', 'secret'));
+
+        $provider->logout();
+
+        $this->assertSame('user-42', $revokedProfile);
+        $this->assertFalse($provider->isAuthenticated());
+        $this->assertNull($provider->profile());
+    }
+
+    public function testPresenceLogoutFailsClosedWhenRevocationFails(): void
+    {
+        $registry = new FakePresenceRegistry(FakePresenceResult::success(
+            new FakePresencePrincipal(
+                'user-42',
+                new FakePresenceCollection(['operator']),
+                new FakePresenceCollection([])
+            )
+        ));
+        $provider = new PresenceAuthProvider(
+            $registry,
+            static fn (AuthRequest $request): object => (object)['secret' => $request->secret()],
+            static fn (): object => (object)[],
+            static function (): never {
+                throw new \RuntimeException('revocation unavailable');
+            }
+        );
+        $provider->authenticate(new AuthRequest('alex', 'secret'));
+
+        try {
+            $provider->logout();
+            $this->fail('Expected the revocation failure to be propagated.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('revocation unavailable', $exception->getMessage());
+        }
+
+        $this->assertFalse($provider->isAuthenticated());
+        $this->assertNull($provider->profile());
+    }
+
     private function makeProvider(FakePresenceRegistry $registry): PresenceAuthProvider
     {
         return new PresenceAuthProvider(

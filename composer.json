@@ -37,6 +37,9 @@
         "phpunit/phpunit": "^11.1@dev",
         "php": ">=8.0.0"
     },
+    "suggest": {
+        "bluefission/presence": "Enables advanced authentication, authorization, and session integration."
+    },
     "autoload": {
         "psr-4": {
             "BlueFission\\": [
