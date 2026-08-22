@@ -8,8 +8,15 @@ changing command or terminal code.
 ## Presence provider
 
 `PresenceAuthProvider` adapts a configured Presence authenticator registry to
-Wise profiles. Presence remains optional so clean CLI and headless installations
-do not require authentication infrastructure.
+Wise profiles. Presence remains an optional runtime capability so clean CLI and
+headless installations do not require private authentication infrastructure.
+
+Presence is distributed from its authenticated GitHub VCS repository. A host
+that enables the provider must configure Composer authentication outside source
+control, register `https://github.com/BlueFissionTech/presence.git` as a VCS
+repository, and install `bluefission/presence:^0.1.0@alpha`. Wise installs that
+released package during development so its contract tests exercise the real
+upstream value objects and registry.
 
 The host must provide a registry with the authenticators required by its policy:
 
