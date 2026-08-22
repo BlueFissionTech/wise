@@ -147,6 +147,20 @@ class CommandResult extends Obj
         return $this->continuationToken?->val();
     }
 
+    public function withMetadata(array $metadata): self
+    {
+        return new self(
+            $this->status(),
+            $this->output(),
+            $this->command(),
+            $this->confirmationRequired(),
+            $this->exitCode(),
+            $this->diagnostics(),
+            Arr::merge($metadata, $this->metadata()),
+            $this->continuationToken()
+        );
+    }
+
     public function toArray(): array
     {
         return [
