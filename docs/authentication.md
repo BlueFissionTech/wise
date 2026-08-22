@@ -14,9 +14,9 @@ headless installations do not require private authentication infrastructure.
 Presence is distributed from its authenticated GitHub VCS repository. A host
 that enables the provider must configure Composer authentication outside source
 control, register `https://github.com/BlueFissionTech/presence.git` as a VCS
-repository, and install `bluefission/presence:^0.1.0-alpha.1`. Wise installs that
-released package during development so its contract tests exercise the real
-upstream value objects and registry.
+repository, and install `bluefission/presence:^0.1.0-alpha.1`. Wise does not
+require the private package for clean CLI installations. Its package contract
+tests run automatically when Presence is installed in the development host.
 
 The host must provide a registry with the authenticators required by its policy:
 

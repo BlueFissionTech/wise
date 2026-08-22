@@ -16,6 +16,13 @@ use PHPUnit\Framework\TestCase;
 
 final class PresencePackageContractTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        if (!class_exists(AuthenticatorRegistry::class)) {
+            $this->markTestSkipped('Presence package is not installed.');
+        }
+    }
+
     public function testReleasedRegistryMapsPrincipalRolesAndPermissions(): void
     {
         $registry = new AuthenticatorRegistry();
