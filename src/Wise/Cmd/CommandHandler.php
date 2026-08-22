@@ -53,6 +53,11 @@ class CommandHandler {
         $this->_aliases[$alias] = $command;
     }
 
+    public function availableCommands(): array
+    {
+        return Arr::make($this->_aliases)->keys()->sort()->toArray();
+    }
+
     protected function registerInternalCommands() {
         // Register aliases for internal commands
         $this->registerAlias('list', 'listDir');

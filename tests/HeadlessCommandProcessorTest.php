@@ -187,6 +187,59 @@ final class HeadlessCommandProcessorTest extends TestCase
         $this->assertStringNotContainsString('sensitive', (string)$result->output());
     }
 
+    public function testResourceCommandResultIsPreservedWithoutSuccessfulRewrapping(): void
+    {
+        $resourceResult = CommandResult::failure(
+            'Resource execution failed.',
+            ['resource_failure'],
+            ['source' => 'resource']
+        );
+        App::instance()->register('result-resource', 'inspect', fn (): null => null);
+        $processor = new class($this->makeStorage(), $resourceResult) extends CommandProcessor {
+            public function __construct(Storage $storage, private CommandResult $resourceResult)
+            {
+                parent::__construct($storage);
+            }
+
+            protected function executeCommand(Command $command): CommandResult
+            {
+                return $this->resourceResult;
+            }
+        };
+
+        $result = $processor->process(new CommandRequest([
+            'verb' => 'inspect',
+            'resource' => 'result-resource',
+        ], context: ['correlation_id' => 'req-result']));
+
+        $this->assertSame(CommandResult::FAILED, $result->status());
+        $this->assertSame(1, $result->exitCode());
+        $this->assertSame('Resource execution failed.', $result->output());
+        $this->assertSame(['resource_failure'], $result->diagnostics());
+        $this->assertSame([
+            'correlation_id' => 'req-result',
+            'source' => 'resource',
+        ], $result->metadata());
+    }
+
+    public function testCaughtResourceExceptionReturnsFailureResult(): void
+    {
+        App::instance()->register('throwing-resource', 'inspect', function (): never {
+            throw new \RuntimeException('sensitive resource detail');
+        });
+
+        $result = $this->processor()->process([
+            'verb' => 'inspect',
+            'resource' => 'throwing-resource',
+        ]);
+
+        $this->assertSame(CommandResult::FAILED, $result->status());
+        $this->assertSame(1, $result->exitCode());
+        $this->assertSame('Command execution failed.', $result->output());
+        $this->assertSame(['exception' => \RuntimeException::class], $result->diagnostics());
+        $this->assertStringNotContainsString('sensitive', (string)$result->output());
+    }
+
     public function testResultSerializesAsStableHostEnvelope(): void
     {
         $command = new Command();

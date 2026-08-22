@@ -313,15 +313,13 @@ class CommandProcessor implements ICommandProcessor
                 return $output ?: $this->conversationalResponse("Command triggered with empty response. Perhaps it failed?");
             });
 
-        } catch ( \Exception $e ) {
-            $result = $e->getMessage();
+        } catch (\Throwable $exception) {
             $this->_storage->crashes++;
             $this->_storage->write();
 
-            // Check for crashes multiple of 5
-            if ($this->_storage->crashes % 5 == 0) {
-                return $this->conversationalResponse("You've had 5 crashes. Error: " . $result);
-            }
+            return CommandResult::failure('Command execution failed.', [
+                'exception' => $exception::class,
+            ]);
         }
 
         // Check for warnings
@@ -406,6 +404,10 @@ class CommandProcessor implements ICommandProcessor
 
     private function resultForOutput(mixed $output, array $metadata = []): CommandResult
     {
+        if ($output instanceof CommandResult) {
+            return $output->withMetadata($metadata);
+        }
+
         if ($this->_confirmationRequired || Val::is($this->_storage->confirmCmd ?? null)) {
             return CommandResult::pending(
                 $output,
