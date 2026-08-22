@@ -18,23 +18,26 @@ class PresenceAuthProvider extends Obj implements AuthProviderInterface
     private ?object $registry;
     private $credentialFactory;
     private $contextFactory;
+    private $logoutHandler;
     private ?AuthOutcome $outcome = null;
 
     public function __construct(
         ?object $registry = null,
         ?callable $credentialFactory = null,
-        ?callable $contextFactory = null
+        ?callable $contextFactory = null,
+        ?callable $logoutHandler = null
     ) {
         parent::__construct();
         $this->registry = $registry ?? $this->defaultRegistry();
         $this->credentialFactory = $credentialFactory ?? $this->defaultCredentialFactory();
         $this->contextFactory = $contextFactory ?? $this->defaultContextFactory();
+        $this->logoutHandler = $logoutHandler;
     }
 
     public function available(): bool
     {
         return Val::is($this->registry)
-            && method_exists($this->registry, 'authenticate')
+            && Func::isCallable([$this->registry, 'authenticate'])
             && Func::isCallable($this->credentialFactory)
             && Func::isCallable($this->contextFactory);
     }
@@ -55,7 +58,9 @@ class PresenceAuthProvider extends Obj implements AuthProviderInterface
             ]);
         }
 
-        if (!is_object($result) || !method_exists($result, 'isSuccessful') || !$result->isSuccessful()) {
+        if (!Val::make($result)->check('is_object')
+            || !Func::isCallable([$result, 'isSuccessful'])
+            || !$result->isSuccessful()) {
             return $this->outcome = AuthOutcome::failure(
                 (string)($result->reason ?? 'authentication_failed'),
                 Arr::is($result->metadata ?? null) ? $result->metadata : []
@@ -63,14 +68,14 @@ class PresenceAuthProvider extends Obj implements AuthProviderInterface
         }
 
         $principal = $result->principal ?? null;
-        if (!is_object($principal) || !method_exists($principal, 'id')) {
+        if (!Val::make($principal)->check('is_object') || !Func::isCallable([$principal, 'id'])) {
             return $this->outcome = AuthOutcome::failure('presence_principal_missing');
         }
 
         $profile = new Profile(
             (string)$principal->id(),
-            $this->namesFromCollection(method_exists($principal, 'roles') ? $principal->roles() : null, ['user']),
-            $this->namesFromCollection(method_exists($principal, 'permissions') ? $principal->permissions() : null)
+            $this->namesFromCollection(Func::isCallable([$principal, 'roles']) ? $principal->roles() : null, ['user']),
+            $this->namesFromCollection(Func::isCallable([$principal, 'permissions']) ? $principal->permissions() : null)
         );
 
         return $this->outcome = AuthOutcome::success($profile, Arr::merge(
@@ -81,7 +86,13 @@ class PresenceAuthProvider extends Obj implements AuthProviderInterface
 
     public function logout(): void
     {
-        $this->outcome = null;
+        try {
+            if (Func::isCallable($this->logoutHandler) && Val::is($this->outcome)) {
+                ($this->logoutHandler)($this->outcome);
+            }
+        } finally {
+            $this->outcome = null;
+        }
     }
 
     public function isAuthenticated(): bool
@@ -145,7 +156,7 @@ class PresenceAuthProvider extends Obj implements AuthProviderInterface
 
     private function namesFromCollection(mixed $collection, array $default = []): array
     {
-        if (is_object($collection) && method_exists($collection, 'toArray')) {
+        if (Val::make($collection)->check('is_object') && Func::isCallable([$collection, 'toArray'])) {
             $collection = $collection->toArray(true);
         }
         if (!Arr::is($collection)) {

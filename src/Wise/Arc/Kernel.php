@@ -22,6 +22,7 @@ use BlueFission\Arr;
 use BlueFission\Str;
 use BlueFission\Val;
 use BlueFission\Wise\Usr\Profile;
+use BlueFission\Wise\Usr\Auth\AuthProviderInterface;
 use BlueFission\Wise\Sys\Memory\WorkingMemoryCoordinator;
 use BlueFission\Wise\Exe\{BridgeRegistry, BridgeContext, BridgeResult, ExecutionRequest};
 use BlueFission\Wise\Res\ScriptedResourceRegistry;
@@ -58,7 +59,7 @@ class Kernel {
 
     const INPUT_CHANNEL = '__input__';
 
-    public function __construct(ProcessManager $processManager, CommandProcessor $commandProcessor, MemoryManager $memoryManager, FileSystemManager $fileSystemManager, IInterpreter $interpreter, Console $console, Storage $sessionStorage, Storage $dataStorage, IPC $ipc) {
+    public function __construct(ProcessManager $processManager, CommandProcessor $commandProcessor, MemoryManager $memoryManager, FileSystemManager $fileSystemManager, IInterpreter $interpreter, Console $console, Storage $sessionStorage, Storage $dataStorage, IPC $ipc, ?AuthProviderInterface $authProvider = null) {
         if (self::$_instance) {
             return self::$_instance;
         }
@@ -76,7 +77,11 @@ class Kernel {
         $this->_output = '';
 
         $this->_commandHandler = new CommandHandler($this);
-        $this->_identity = new Identity($this, new Auth( $this->_sessionStorage, $this->_dataStorage ));
+        $this->_identity = new Identity(
+            $this,
+            new Auth($this->_sessionStorage, $this->_dataStorage),
+            $authProvider
+        );
         $this->_profile = $this->_identity->profile();
         $this->_systemProfile = new Profile('system', ['system']);
 
