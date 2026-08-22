@@ -27,6 +27,7 @@
         }
     ],
     "minimum-stability": "dev",
+    "prefer-stable": true,
     "require": {
         "php": ">=8.2",
         "bluefission/develation": "^1.3.43",
@@ -39,7 +40,7 @@
         "orhanerday/open-ai": "^2.2"
     },
     "require-dev": {
-        "bluefission/presence": "^0.1.0@alpha",
+        "bluefission/presence": "^0.1.0-alpha.1",
         "phpunit/phpunit": "^11.1@dev"
     },
     "suggest": {
