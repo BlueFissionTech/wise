@@ -240,6 +240,37 @@ final class HeadlessCommandProcessorTest extends TestCase
         $this->assertStringNotContainsString('sensitive', (string)$result->output());
     }
 
+    public function testRepeatedResourceCrashesAlertTheOperatorAtTheDefaultInterval(): void
+    {
+        $processor = $this->processor();
+        $result = null;
+
+        for ($attempt = 1; $attempt <= 5; $attempt++) {
+            $resource = 'throwing-resource-' . $attempt;
+            App::instance()->register($resource, 'inspect', function (): never {
+                throw new \RuntimeException('sensitive resource detail');
+            });
+
+            $result = $processor->process([
+                'verb' => 'inspect',
+                'resource' => $resource,
+            ]);
+        }
+
+        $this->assertInstanceOf(CommandResult::class, $result);
+        $this->assertSame(CommandResult::FAILED, $result->status());
+        $this->assertSame(
+            'Repeated command failures detected. Re-assess the command or run diagnostics.',
+            $result->output()
+        );
+        $this->assertSame([
+            'crash_count' => 5,
+            'crash_alert_interval' => 5,
+            'operator_alert' => true,
+        ], $result->metadata());
+        $this->assertStringNotContainsString('sensitive', (string)$result->output());
+    }
+
     public function testResultSerializesAsStableHostEnvelope(): void
     {
         $command = new Command();

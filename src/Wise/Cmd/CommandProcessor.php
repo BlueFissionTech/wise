@@ -16,6 +16,8 @@ use BlueFission\Val;
 
 class CommandProcessor implements ICommandProcessor
 {
+    protected const CRASH_ALERT_INTERVAL = 5;
+
     protected $_parser;
     protected $_app;
     protected $_storage;
@@ -317,9 +319,20 @@ class CommandProcessor implements ICommandProcessor
             $this->_storage->crashes++;
             $this->_storage->write();
 
-            return CommandResult::failure('Command execution failed.', [
-                'exception' => $exception::class,
-            ]);
+            $crashCount = (int)$this->_storage->crashes;
+            $operatorAlert = $crashCount % static::CRASH_ALERT_INTERVAL === 0;
+
+            return CommandResult::failure(
+                $operatorAlert
+                    ? 'Repeated command failures detected. Re-assess the command or run diagnostics.'
+                    : 'Command execution failed.',
+                ['exception' => $exception::class],
+                [
+                    'crash_count' => $crashCount,
+                    'crash_alert_interval' => static::CRASH_ALERT_INTERVAL,
+                    'operator_alert' => $operatorAlert,
+                ]
+            );
         }
 
         // Check for warnings
