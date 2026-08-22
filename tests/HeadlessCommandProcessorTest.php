@@ -54,6 +54,17 @@ final class HeadlessCommandProcessorTest extends TestCase
         ], $result->command()?->toArray());
     }
 
+    public function testStructuredResourceIdentifierRemainsCallerDefined(): void
+    {
+        $result = $this->processor()->process(CommandRequest::parse([
+            'operator' => 'list',
+            'objects' => ['missing_resource'],
+        ]));
+
+        $this->assertSame(CommandResult::PARSED, $result->status());
+        $this->assertSame(['missing_resource'], $result->command()?->resources);
+    }
+
     public function testStructuredInputExecutesWithoutWritingToTerminal(): void
     {
         App::instance()->register('headless-resource', 'inspect', fn (): string => 'headless-output');
