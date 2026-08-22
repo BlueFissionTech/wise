@@ -2,6 +2,7 @@
 
 namespace BlueFission\Tests;
 
+use BlueFission\Arr;
 use BlueFission\Wise\Arc\Kernel;
 use BlueFission\Wise\Cmd\CommandHandler;
 use BlueFission\Wise\Cmd\CommandRequest;
@@ -148,6 +149,36 @@ final class CommandRuntimeTest extends TestCase
             'native' => ['echo', 'help'],
             'script_extensions' => [],
         ], $runtime->discover());
+    }
+
+    public function testConfirmationContinuationIsPreservedInPromptFrame(): void
+    {
+        $processor = new class implements ICommandProcessor {
+            public function process(CommandRequest|\BlueFission\Wise\Cmd\Command|array|string $request): CommandResult
+            {
+                $request = $request instanceof CommandRequest ? $request : new CommandRequest($request);
+
+                return CommandResult::pending(
+                    'Approve command?',
+                    null,
+                    'continuation-1',
+                    $request->context()
+                );
+            }
+        };
+        $runtime = new CommandRuntime($processor);
+        $result = $runtime->execute('inspect resource', new RuntimeContext([
+            'correlation_id' => 'confirmation-1',
+        ]));
+        $frames = $result->toArray()['frames'];
+        $prompt = Arr::make($frames)->pop();
+
+        $this->assertTrue($result->result()->confirmationRequired());
+        $this->assertSame('continuation-1', $result->result()->continuationToken());
+        $this->assertSame(0, $result->result()->exitCode());
+        $this->assertSame(OutputFrame::PROMPT, $prompt['type']);
+        $this->assertSame('continuation-1', $prompt['metadata']['continuation_token']);
+        $this->assertSame('confirmation-1', $result->result()->metadata()['correlation_id']);
     }
 
     private function processor(): ICommandProcessor
