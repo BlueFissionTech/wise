@@ -1,6 +1,5 @@
 <?php
 
-// WebBrowserCommand.php
 namespace BlueFission\Wise\Res;
 
 use BlueFission\Services\Service;
