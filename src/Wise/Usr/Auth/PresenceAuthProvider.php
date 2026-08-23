@@ -5,15 +5,18 @@ namespace BlueFission\Wise\Usr\Auth;
 use BlueFission\Arr;
 use BlueFission\Func;
 use BlueFission\Obj;
+use BlueFission\Presence\Auth\AuthenticatorRegistry;
+use BlueFission\Presence\Auth\Credential;
+use BlueFission\Presence\Support\Context;
 use BlueFission\Str;
 use BlueFission\Val;
 use BlueFission\Wise\Usr\Profile;
 
 class PresenceAuthProvider extends Obj implements AuthProviderInterface
 {
-    private const REGISTRY = 'BlueFission\\Presence\\Auth\\AuthenticatorRegistry';
-    private const CREDENTIAL = 'BlueFission\\Presence\\Auth\\Credential';
-    private const CONTEXT = 'BlueFission\\Presence\\Support\\Context';
+    private const REGISTRY = AuthenticatorRegistry::class;
+    private const CREDENTIAL = Credential::class;
+    private const CONTEXT = Context::class;
 
     private ?object $registry;
     private $credentialFactory;
