@@ -156,7 +156,7 @@ class CommandResult extends Obj
             $this->confirmationRequired(),
             $this->exitCode(),
             $this->diagnostics(),
-            Arr::merge($metadata, $this->metadata()),
+            Arr::merge($this->metadata(), $metadata),
             $this->continuationToken()
         );
     }
