@@ -16,4 +16,8 @@ interface ICommandRuntime
     ): RuntimeResult;
 
     public function discover(?RuntimeContext $context = null): array;
+
+    public function descriptors(?RuntimeContext $context = null): array;
+
+    public function descriptor(string $identifier, ?RuntimeContext $context = null): CommandDescriptor;
 }
