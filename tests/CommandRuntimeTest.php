@@ -5,6 +5,7 @@ namespace BlueFission\Tests;
 use BlueFission\Arr;
 use BlueFission\Wise\Arc\Kernel;
 use BlueFission\Wise\Cmd\CommandHandler;
+use BlueFission\Wise\Cmd\CommandPolicy;
 use BlueFission\Wise\Cmd\CommandRequest;
 use BlueFission\Wise\Cmd\CommandResult;
 use BlueFission\Wise\Cmd\CommandRuntime;
@@ -13,7 +14,11 @@ use BlueFission\Wise\Cmd\ICommandRuntime;
 use BlueFission\Wise\Cmd\OutputFrame;
 use BlueFission\Wise\Cmd\RuntimeContext;
 use BlueFission\Wise\Exe\BridgeResult;
+use BlueFission\Wise\Exe\BridgeContext;
+use BlueFission\Wise\Exe\BridgeRegistry;
 use BlueFission\Wise\Exe\ExecutionRequest;
+use BlueFission\Wise\Exe\IBridge;
+use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 
 final class CommandRuntimeTest extends TestCase
@@ -179,6 +184,134 @@ final class CommandRuntimeTest extends TestCase
         $this->assertSame(OutputFrame::PROMPT, $prompt['type']);
         $this->assertSame('continuation-1', $prompt['metadata']['continuation_token']);
         $this->assertSame('confirmation-1', $result->result()->metadata()['correlation_id']);
+    }
+
+    public function testPolicyDeniesBeforeResourceDispatchAndPreservesHostContext(): void
+    {
+        $processor = $this->processor();
+        $runtime = new CommandRuntime($processor);
+        $context = new RuntimeContext(
+            ['correlation_id' => 'policy-denied'],
+            actor: ['id' => 'actor-1'],
+            capabilities: ['read'],
+            commandPolicy: new CommandPolicy(['resource:item.list'])
+        );
+
+        $result = $runtime->execute('inspect resource', $context)->result();
+
+        $this->assertSame(CommandResult::FAILED, $result->status());
+        $this->assertSame([
+            'command_policy_denied',
+            'identifier' => 'resource:resource.inspect',
+        ], $result->diagnostics());
+        $this->assertSame(0, $processor->calls);
+        $this->assertSame('policy-denied', $result->metadata()['correlation_id']);
+        $this->assertSame('actor-1', $result->metadata()['actor']['id']);
+        $this->assertSame(['read'], $result->metadata()['capabilities']);
+        $this->assertSame(
+            ['allowlist' => ['resource:item.list']],
+            $result->metadata()['command_policy']
+        );
+    }
+
+    public function testPolicyFiltersDiscoveryAcrossResourceNativeAndScriptRoutes(): void
+    {
+        $handler = new class extends CommandHandler {
+            public function __construct()
+            {
+            }
+
+            public function availableCommands(): array
+            {
+                return ['echo', 'help'];
+            }
+        };
+        $registry = new BridgeRegistry();
+        $registry->register(new class implements IBridge {
+            public function name(): string
+            {
+                return 'test';
+            }
+
+            public function extensions(): array
+            {
+                return ['jss', 'vibe'];
+            }
+
+            public function canHandleFile(string $path): bool
+            {
+                return true;
+            }
+
+            public function runFile(string $path, BridgeContext $context): BridgeResult
+            {
+                return BridgeResult::success();
+            }
+
+            public function runSource(string $source, BridgeContext $context, ?string $path = null): BridgeResult
+            {
+                return BridgeResult::success();
+            }
+        });
+        $kernel = new class($registry) extends Kernel {
+            public function __construct(private BridgeRegistry $registry)
+            {
+            }
+
+            public function bridgeRegistry(): ?BridgeRegistry
+            {
+                return $this->registry;
+            }
+        };
+        $processor = new class implements ICommandProcessor {
+            public function process(CommandRequest|\BlueFission\Wise\Cmd\Command|array|string $request): CommandResult
+            {
+                return CommandResult::completed('processed');
+            }
+
+            public function availableCommands(): array
+            {
+                return ['inspect resource', 'list item'];
+            }
+        };
+        $runtime = new CommandRuntime($processor, $handler, $kernel);
+        $context = new RuntimeContext(commandPolicy: new CommandPolicy([
+            'resource:resource.inspect',
+            'native:help',
+            'script:jss',
+        ]));
+
+        $this->assertSame([
+            'commands' => ['inspect resource'],
+            'native' => ['help'],
+            'script_extensions' => ['jss'],
+        ], $runtime->discover($context));
+    }
+
+    public function testPolicyIsRequestScopedAcrossSharedRuntime(): void
+    {
+        $processor = $this->processor();
+        $runtime = new CommandRuntime($processor);
+        $allowed = new RuntimeContext(commandPolicy: new CommandPolicy(['resource:resource.*']));
+        $denied = new RuntimeContext(commandPolicy: new CommandPolicy(['native:help']));
+
+        $first = $runtime->execute('inspect resource', $allowed)->result();
+        $second = $runtime->execute('inspect resource', $denied)->result();
+        $third = $runtime->execute('inspect resource', $allowed)->result();
+
+        $this->assertSame(CommandResult::COMPLETED, $first->status());
+        $this->assertSame(CommandResult::FAILED, $second->status());
+        $this->assertSame(CommandResult::COMPLETED, $third->status());
+        $this->assertSame(2, $processor->calls);
+        $this->assertSame(['inspect resource'], $runtime->discover($allowed)['commands']);
+        $this->assertSame([], $runtime->discover($denied)['commands']);
+    }
+
+    public function testPolicyRejectsMalformedIdentifiers(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        new CommandPolicy(['inspect resource']);
     }
 
     private function processor(): ICommandProcessor

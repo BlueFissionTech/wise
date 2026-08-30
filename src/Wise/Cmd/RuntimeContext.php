@@ -18,6 +18,7 @@ final class RuntimeContext extends Obj
     private Arr $environmentAllowlist;
     private Arr $actor;
     private Arr $capabilities;
+    private ?CommandPolicy $commandPolicy;
     private Num $timeoutMs;
     private ?float $deadlineAt;
     private mixed $cancelCheck;
@@ -33,7 +34,8 @@ final class RuntimeContext extends Obj
         array $capabilities = [],
         int $timeoutMs = 0,
         ?float $deadlineAt = null,
-        ?callable $cancelCheck = null
+        ?callable $cancelCheck = null,
+        ?CommandPolicy $commandPolicy = null
     ) {
         parent::__construct();
         $this->metadata = Arr::make($metadata);
@@ -51,6 +53,7 @@ final class RuntimeContext extends Obj
             ->map(fn ($capability) => Str::make((string)$capability)->trim()->lower()->val())
             ->filter(fn ($capability) => Str::isNotEmpty((string)$capability))
             ->unique();
+        $this->commandPolicy = $commandPolicy;
         $this->timeoutMs = Num::make(Num::max(0, $timeoutMs));
         $this->deadlineAt = $deadlineAt;
         $this->cancelCheck = $cancelCheck;
@@ -59,10 +62,14 @@ final class RuntimeContext extends Obj
 
     public function metadata(): array
     {
-        return Arr::merge($this->metadata->toArray(), [
+        $metadata = Arr::merge($this->metadata->toArray(), [
             'actor' => $this->actor->toArray(),
             'capabilities' => $this->capabilities->toArray(),
         ]);
+
+        return $this->commandPolicy instanceof CommandPolicy
+            ? Arr::merge($metadata, ['command_policy' => $this->commandPolicy->toArray()])
+            : $metadata;
     }
 
     public function arguments(): array
@@ -96,6 +103,17 @@ final class RuntimeContext extends Obj
     public function hasCapability(string $capability): bool
     {
         return $this->capabilities->has(Str::lower($capability), true);
+    }
+
+    public function commandPolicy(): ?CommandPolicy
+    {
+        return $this->commandPolicy;
+    }
+
+    public function allowsCommand(string $identifier): bool
+    {
+        return !$this->commandPolicy instanceof CommandPolicy
+            || $this->commandPolicy->allows($identifier);
     }
 
     public function cancelled(): bool

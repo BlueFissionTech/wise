@@ -38,6 +38,11 @@ final class CommandRuntime implements ICommandRuntime
 
         if (Str::is($input) && $this->nativeHandler?->canHandle((string)$input)) {
             $commandName = Str::make((string)$input)->trim()->split()->shift();
+            $identifier = CommandPolicy::native((string)$commandName);
+            $denied = $this->denyUnlessAllowed($context, $identifier);
+            if ($denied instanceof RuntimeResult) {
+                return $denied;
+            }
             if (Str::match('clear', Str::lower((string)$commandName))) {
                 return $this->failure(
                     'Screen control is unavailable in headless execution.',
@@ -62,6 +67,12 @@ final class CommandRuntime implements ICommandRuntime
             }
         }
 
+        $identifier = $this->resourceIdentifier($request->input());
+        $denied = $this->denyUnlessAllowed($context, $identifier);
+        if ($denied instanceof RuntimeResult) {
+            return $denied;
+        }
+
         return RuntimeResult::fromCommandResult($this->processor->process($request));
     }
 
@@ -73,6 +84,10 @@ final class CommandRuntime implements ICommandRuntime
         $guard = $this->guard($context);
         if ($guard instanceof RuntimeResult) {
             return $guard;
+        }
+        $denied = $this->denyUnlessAllowed($context, $this->scriptIdentifier($path));
+        if ($denied instanceof RuntimeResult) {
+            return $denied;
         }
         if ($context->workingDirectory() !== null
             && !$context->hasCapability(ExecutionRequest::CAP_FILESYSTEM)) {
@@ -118,7 +133,7 @@ final class CommandRuntime implements ICommandRuntime
         return RuntimeResult::fromCommandResult($result);
     }
 
-    public function discover(): array
+    public function discover(?RuntimeContext $context = null): array
     {
         $resourceCommands = Func::isCallable([$this->processor, 'availableCommands'])
             ? $this->processor->availableCommands()
@@ -126,10 +141,26 @@ final class CommandRuntime implements ICommandRuntime
         $nativeCommands = $this->nativeHandler?->availableCommands() ?? [];
         $scriptExtensions = $this->kernel?->bridgeRegistry()?->extensions() ?? [];
 
+        $resourceCommands = Arr::make($resourceCommands)
+            ->filter(fn ($command) => $this->allowed($context, $this->resourceIdentifier((string)$command)))
+            ->unique()
+            ->sort()
+            ->toArray();
+        $nativeCommands = Arr::make($nativeCommands)
+            ->filter(fn ($command) => $this->allowed($context, CommandPolicy::native((string)$command)))
+            ->unique()
+            ->sort()
+            ->toArray();
+        $scriptExtensions = Arr::make($scriptExtensions)
+            ->filter(fn ($extension) => $this->allowed($context, CommandPolicy::script((string)$extension)))
+            ->unique()
+            ->sort()
+            ->toArray();
+
         return [
-            'commands' => Arr::make($resourceCommands)->unique()->sort()->toArray(),
-            'native' => Arr::make($nativeCommands)->unique()->sort()->toArray(),
-            'script_extensions' => Arr::make($scriptExtensions)->unique()->sort()->toArray(),
+            'commands' => $resourceCommands,
+            'native' => $nativeCommands,
+            'script_extensions' => $scriptExtensions,
         ];
     }
 
@@ -177,5 +208,56 @@ final class CommandRuntime implements ICommandRuntime
         $command = Str::make($input)->trim()->split()->shift();
 
         return Str::match('run', Str::lower((string)$command));
+    }
+
+    private function allowed(?RuntimeContext $context, string $identifier): bool
+    {
+        return !$context instanceof RuntimeContext || $context->allowsCommand($identifier);
+    }
+
+    private function denyUnlessAllowed(RuntimeContext $context, string $identifier): ?RuntimeResult
+    {
+        if ($context->allowsCommand($identifier)) {
+            return null;
+        }
+
+        return $this->failure(
+            'Command is not allowed by the request policy.',
+            ['command_policy_denied', 'identifier' => $identifier],
+            $context
+        );
+    }
+
+    private function resourceIdentifier(Command|array|string $input): string
+    {
+        if ($input instanceof Command) {
+            return CommandPolicy::resource(
+                (string)(Arr::make($input->resources)->shift() ?? ''),
+                (string)$input->verb
+            );
+        }
+        if (Arr::is($input)) {
+            $resource = $input['resource'] ?? $input['objects'] ?? $input['resources'] ?? '';
+            if (Arr::is($resource)) {
+                $resource = Arr::make($resource)->shift();
+            }
+            $action = $input['verb'] ?? $input['operator'] ?? '';
+
+            return CommandPolicy::resource((string)$resource, (string)$action);
+        }
+
+        $parts = Str::make((string)$input)->trim()->split();
+        $action = (string)$parts->shift();
+        $resource = (string)$parts->shift();
+
+        return CommandPolicy::resource($resource, $action);
+    }
+
+    private function scriptIdentifier(string $path): string
+    {
+        $parts = Str::make($path)->split('.');
+        $extension = (string)$parts->pop();
+
+        return CommandPolicy::script($extension);
     }
 }
