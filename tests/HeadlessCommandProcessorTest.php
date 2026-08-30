@@ -8,6 +8,9 @@ use BlueFission\Wise\Cmd\Command;
 use BlueFission\Wise\Cmd\CommandProcessor;
 use BlueFission\Wise\Cmd\CommandRequest;
 use BlueFission\Wise\Cmd\CommandResult;
+use BlueFission\Wise\Cmd\ContinuationClaim;
+use BlueFission\Wise\Cmd\ContinuationState;
+use BlueFission\Wise\Cmd\StorageContinuationStore;
 use PHPUnit\Framework\TestCase;
 
 final class HeadlessCommandProcessorTest extends TestCase
@@ -176,6 +179,79 @@ final class HeadlessCommandProcessorTest extends TestCase
         $this->assertSame(CommandResult::COMPLETED, $rejected->status());
         $this->assertSame('Command cancelled.', $rejected->output());
         $this->assertSame(3, $executions);
+    }
+
+    public function testContinuationCanResumeInNewProcessorWithSharedStore(): void
+    {
+        $executions = 0;
+        App::instance()->register('persistent-continuation', 'inspect', function () use (&$executions): void {
+            $executions++;
+        });
+        $continuationStore = new StorageContinuationStore($this->makeStorage());
+        $first = new CommandProcessor($this->makeStorage(), continuationStore: $continuationStore);
+        $input = ['verb' => 'inspect', 'resource' => 'persistent-continuation'];
+        $context = ['actor' => ['id' => 'actor-1'], 'tenant_id' => 'tenant-1', 'request_id' => 'first'];
+
+        $first->process(new CommandRequest($input, context: $context));
+        $first->process(new CommandRequest($input, context: $context));
+        $first->process(new CommandRequest($input, context: $context));
+        $pending = $first->process(new CommandRequest($input, context: $context));
+
+        $second = new CommandProcessor($this->makeStorage(), continuationStore: $continuationStore);
+        $completed = $second->process(CommandRequest::resume(
+            (string)$pending->continuationToken(),
+            true,
+            ['actor' => ['id' => 'actor-1'], 'tenant_id' => 'tenant-1', 'request_id' => 'second']
+        ));
+
+        $this->assertSame(CommandResult::COMPLETED, $completed->status());
+        $this->assertSame(4, $executions);
+        $this->assertSame('second', $completed->metadata()['request_id']);
+        $this->assertSame('actor-1', $completed->metadata()['actor']['id']);
+    }
+
+    public function testContinuationScopeMismatchFailsClosedWithoutConsumption(): void
+    {
+        $executions = 0;
+        App::instance()->register('scoped-continuation', 'inspect', function () use (&$executions): void {
+            $executions++;
+        });
+        $store = new StorageContinuationStore($this->makeStorage());
+        $processor = new CommandProcessor($this->makeStorage(), continuationStore: $store);
+        $input = ['verb' => 'inspect', 'resource' => 'scoped-continuation'];
+        $context = ['actor' => ['id' => 'actor-1']];
+        for ($attempt = 0; $attempt < 4; $attempt++) {
+            $pending = $processor->process(new CommandRequest($input, context: $context));
+        }
+
+        $mismatched = $processor->process(CommandRequest::resume(
+            (string)$pending->continuationToken(),
+            true,
+            ['actor' => ['id' => 'actor-2']]
+        ));
+        $accepted = $processor->process(CommandRequest::resume(
+            (string)$pending->continuationToken(),
+            true,
+            $context
+        ));
+
+        $this->assertSame(['continuation_scope_mismatch'], $mismatched->diagnostics());
+        $this->assertSame(CommandResult::COMPLETED, $accepted->status());
+        $this->assertSame(4, $executions);
+    }
+
+    public function testContinuationStoreDistinguishesExpiredMissingAndReplayedTokens(): void
+    {
+        $store = new StorageContinuationStore($this->makeStorage(), replayLimit: 2);
+        $expired = new ContinuationState('expired', [], [], [], microtime(true) - 1);
+        $accepted = new ContinuationState('accepted', [], [], [], microtime(true) + 60);
+        $store->put($expired);
+        $store->put($accepted);
+
+        $this->assertSame(ContinuationClaim::EXPIRED, $store->consume('expired')->status());
+        $this->assertSame(ContinuationClaim::MISSING, $store->consume('missing')->status());
+        $this->assertSame(ContinuationClaim::ACCEPTED, $store->consume('accepted')->status());
+        $this->assertSame(ContinuationClaim::REPLAYED, $store->consume('accepted')->status());
     }
 
     public function testUnhandledFailuresReturnSanitizedResult(): void

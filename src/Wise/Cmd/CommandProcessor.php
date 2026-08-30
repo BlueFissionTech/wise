@@ -28,6 +28,7 @@ class CommandProcessor implements ICommandProcessor
     protected ?Command $_lastCommand = null;
     protected ?string $_lastResource = null;
     protected bool $_confirmationRequired = false;
+    protected IContinuationStore $_continuationStore;
 
     protected $_availableCommands = [];
 
@@ -38,13 +39,19 @@ class CommandProcessor implements ICommandProcessor
 
     protected $_keywords = [];
 
-    public function __construct(Storage $storage, IClient $llmClient = null, INavigator $navigator = null)
+    public function __construct(
+        Storage $storage,
+        IClient $llmClient = null,
+        INavigator $navigator = null,
+        ?IContinuationStore $continuationStore = null
+    )
     {
         $this->setKeywords();
         $this->_parser = new CommandParser();
         $this->_app = App::instance();
         $this->_storage = $storage;
         $this->_storage->activate();
+        $this->_continuationStore = $continuationStore ?? new StorageContinuationStore($storage);
 
         $this->_llmClient = $llmClient;
         $this->_navigator = $navigator;
@@ -425,7 +432,7 @@ class CommandProcessor implements ICommandProcessor
             return CommandResult::pending(
                 $output,
                 $this->_lastCommand,
-                $this->continuationToken(),
+                $this->continuationToken($metadata),
                 $metadata
             );
         }
@@ -433,52 +440,46 @@ class CommandProcessor implements ICommandProcessor
         return CommandResult::completed($output, $this->_lastCommand, $metadata);
     }
 
-    private function continuationToken(): string
+    private function continuationToken(array $metadata): string
     {
-        $token = $this->_storage->confirmToken ?? null;
-        if (Str::isNotEmpty((string)$token)) {
-            return (string)$token;
-        }
+        $pending = $this->_storage->confirmCmd ?? $this->_lastCommand;
+        $command = $pending instanceof Command
+            ? $pending
+            : $this->convertToCommand($pending);
+        $state = ContinuationState::issue($command->toArray(), $metadata);
+        $this->_continuationStore->put($state);
 
-        $token = Str::uuid4();
-        $this->_storage->confirmToken = $token;
-        $this->_storage->write();
-
-        return $token;
+        return $state->token();
     }
 
     private function resume(CommandRequest $request): CommandResult
     {
-        $token = (string)$request->continuationToken();
-        $consumed = Arr::is($this->_storage->consumedContinuations ?? null)
-            ? $this->_storage->consumedContinuations
-            : [];
-
-        if (Arr::has($consumed, $token, true)) {
-            return CommandResult::invalid(
-                'Command continuation has already been consumed.',
-                ['continuation_consumed'],
-                $request->context()
-            );
-        }
-
-        $expected = (string)($this->_storage->confirmToken ?? '');
-        if (Str::isEmpty($expected) || !Str::match($expected, $token)) {
+        $claim = $this->_continuationStore->consume(
+            (string)$request->continuationToken(),
+            ContinuationState::scopeFromContext($request->context())
+        );
+        if (!$claim->accepted()) {
+            $diagnostic = match ($claim->status()) {
+                ContinuationClaim::REPLAYED => 'continuation_consumed',
+                ContinuationClaim::EXPIRED => 'continuation_expired',
+                ContinuationClaim::MISMATCHED => 'continuation_scope_mismatch',
+                default => 'continuation_invalid',
+            };
             return CommandResult::invalid(
                 'Command continuation is invalid.',
-                ['continuation_invalid'],
+                [$diagnostic],
                 $request->context()
             );
         }
 
-        $consumed[] = $token;
-        $consumed = Arr::make($consumed)->slice(-50)->toArray();
-        $this->_storage->consumedContinuations = $consumed;
-        unset($this->_storage->confirmToken);
+        $state = $claim->state();
+        $this->_storage->confirmCmd = $state?->command() ?? [];
         $this->_storage->write();
-
         $output = $this->handle($request->approved() ? 'yes' : 'no');
-        return $this->resultForOutput($output, $request->context());
+        return $this->resultForOutput($output, Arr::merge(
+            $state?->metadata() ?? [],
+            $request->context()
+        ));
     }
 
     public function suggestCommands($input, &$cmd)
