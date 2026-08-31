@@ -304,11 +304,12 @@ if (!$batchMode) {
     $splash = new Components\SplashScreen();
     $repl = new Components\REPL();
     $screen = new Components\Screen();
-    $screen->addChild($repl);
     if ($dynamicDisplay) {
-        $statusLine = new Components\StatusLine(0, 0, 1, 2, '', 10, true, 2);
+        $statusLine = new Components\StatusLine(0, 0, 1, 2, 'Loading W.I.S.E...', 10, true, 2);
         $screen->addChild($statusLine);
         $repl->suspendInput();
+    } else {
+        $screen->addChild($repl);
     }
     $console->addComponent($screen);
     if ($dynamicDisplay) {
@@ -391,11 +392,19 @@ $memoryAdapter = new SynthetiqMemoryAdapter($workingMemory, new Profile('system'
 
 $navigator = null;
 if (!$batchMode) {
-    $console->output('Loading W.I.S.E...', 'system');
+    if ($dynamicDisplay && $statusLine) {
+        $statusLine->setContent('Loading W.I.S.E...');
+    } else {
+        $console->output('Loading W.I.S.E...', 'system');
+    }
     $console->display();
 }
 
-if (!$batchMode || getenv('WISE_NAV_BOOT') === '1') {
+$navBoot = getenv('WISE_NAV_BOOT');
+$bootNavigator = $navBoot === false
+    ? !$batchMode
+    : filter_var($navBoot, FILTER_VALIDATE_BOOLEAN);
+if ($bootNavigator) {
     try {
         $navigator = SynthetiqBootstrap::fromVendorSampleConfigs(null, null, $memoryAdapter, $bootProgress);
     } catch (\Throwable $e) {
@@ -452,6 +461,8 @@ if ($bootProgress) {
 }
 $kernel->boot();
 if (!$batchMode && $statusLine && $screen && $repl) {
+    $repl->setConsole($console);
+    $screen->addChild($repl);
     $statusLine->setContent('');
     $screen->removeChild($statusLine);
     $repl->resumeInput();
