@@ -228,8 +228,8 @@ final class HeadlessCommandProcessorTest extends TestCase
         $this->assertSame('Resource execution failed.', $result->output());
         $this->assertSame(['resource_failure'], $result->diagnostics());
         $this->assertSame([
-            'correlation_id' => 'req-result',
             'source' => 'resource',
+            'correlation_id' => 'req-result',
         ], $result->metadata());
     }
 

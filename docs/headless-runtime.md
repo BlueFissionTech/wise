@@ -45,7 +45,9 @@ $scriptResult = $runtime->executeScript('cmd/status.jss', $runtimeContext);
 `RuntimeResult::result()` returns the authoritative `CommandResult`. If a
 resource already returns a `CommandResult`, its status, output, diagnostics,
 exit code, prompt state, and continuation token are preserved. Host metadata is
-merged once, with result-owned metadata taking precedence.
+merged once through `CommandResult::withMetadata()`. The method returns a new
+result, leaves the original unchanged, and gives supplied host metadata
+precedence when a key already exists.
 
 `RuntimeResult::frames()` exposes typed status, output, diagnostic, and prompt
 frames. A terminal adapter may render these frames; an application adapter may
