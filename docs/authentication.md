@@ -70,6 +70,26 @@ remote session may still exist. Without a logout handler, logout remains local.
   when no provider is injected.
 - Authentication exceptions are normalized to
   `presence_authentication_failed` without exposing credential values.
+
+## Terminal identity bridge
+
+`PresenceIdentityBridge` maps an already-authenticated Wise profile into
+Presence's canonical `Principal`, `AuthResult`, participant, and `Session`
+contracts. It does not authenticate credentials, prompt, render, resume a
+continuation, or mutate command results. Those responsibilities remain with the
+host.
+
+Create a Presence `BridgeContext` with `host` set to `wise`, place the current
+`AuthOutcome` or configured Wise authentication provider in `authenticator`, and
+provide one unambiguous Presence session through `session` or
+`presence_context.session_id`. Optional Annex metadata belongs in
+`annex_manifest`. The bridge fails closed when authentication, principal, or
+session state is missing or conflicting.
+
+Lifecycle integrations can observe `wise.identity.bridge.before`,
+`wise.identity.bridge.after`, and `wise.identity.bridge.failure` through
+DevElation actions. Successful and failed bindings also emit Presence's
+`presence.bridge.bound` and `presence.bridge.failed` events.
 - Missing principals, rejected credentials, role mapping, permission checks,
   local logout, and revocation failure have deterministic test coverage.
 
