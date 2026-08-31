@@ -6,7 +6,7 @@ has no consumable release.
 
 The current intelligence baseline is:
 
-- `bluefission/automata:^1.0.0-alpha.4`, distributed through Packagist.
+- `bluefission/automata:^1.0.0-alpha.5`, distributed through Packagist.
 - `bluefission/jenerator:^0.1.0-alpha.1`, distributed as a tagged private GitHub
   VCS release.
 
