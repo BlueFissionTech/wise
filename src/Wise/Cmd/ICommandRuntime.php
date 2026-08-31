@@ -15,5 +15,5 @@ interface ICommandRuntime
         string $standardInput = ''
     ): RuntimeResult;
 
-    public function discover(): array;
+    public function discover(?RuntimeContext $context = null): array;
 }
