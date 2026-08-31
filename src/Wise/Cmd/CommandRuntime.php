@@ -164,6 +164,48 @@ final class CommandRuntime implements ICommandRuntime
         ];
     }
 
+    public function descriptors(?RuntimeContext $context = null): array
+    {
+        $discovery = $this->discover($context);
+        $descriptors = Arr::make();
+        foreach ($discovery['commands'] as $command) {
+            $descriptors->push(CommandDescriptor::resource((string)$command)->toArray());
+        }
+        foreach ($discovery['native'] as $command) {
+            $descriptors->push(CommandDescriptor::native((string)$command)->toArray());
+        }
+        foreach ($discovery['script_extensions'] as $extension) {
+            $descriptors->push(CommandDescriptor::script((string)$extension)->toArray());
+        }
+
+        return $descriptors
+            ->sort(fn (array $left, array $right): int => $left['identifier'] <=> $right['identifier'])
+            ->toArray();
+    }
+
+    public function descriptor(string $identifier, ?RuntimeContext $context = null): CommandDescriptor
+    {
+        $identifier = Str::make($identifier)->trim()->lower()->val();
+        foreach ($this->descriptors($context) as $descriptor) {
+            if (Str::match($identifier, (string)$descriptor['identifier'])) {
+                return new CommandDescriptor(
+                    $descriptor['identifier'],
+                    $descriptor['route'],
+                    $descriptor['resource'],
+                    $descriptor['action'],
+                    $descriptor['summary'],
+                    $descriptor['argument_shape'],
+                    $descriptor['confirmation_required'],
+                    $descriptor['required_capabilities'],
+                    $descriptor['available'],
+                    $descriptor['unavailable_reason']
+                );
+            }
+        }
+
+        return CommandDescriptor::unavailable($identifier);
+    }
+
     private function withContext(
         CommandRequest|Command|array|string $request,
         RuntimeContext $context

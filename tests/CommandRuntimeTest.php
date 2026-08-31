@@ -5,6 +5,7 @@ namespace BlueFission\Tests;
 use BlueFission\Arr;
 use BlueFission\Wise\Arc\Kernel;
 use BlueFission\Wise\Cmd\CommandHandler;
+use BlueFission\Wise\Cmd\CommandDescriptor;
 use BlueFission\Wise\Cmd\CommandPolicy;
 use BlueFission\Wise\Cmd\CommandRequest;
 use BlueFission\Wise\Cmd\CommandResult;
@@ -312,6 +313,89 @@ final class CommandRuntimeTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
 
         new CommandPolicy(['inspect resource']);
+    }
+
+    public function testDescriptorSerializesStableHostNeutralContract(): void
+    {
+        $descriptor = CommandDescriptor::resource('inspect resource', [
+            'summary' => 'Inspect a resource',
+            'argument_shape' => ['type' => 'object', 'required' => ['name']],
+            'confirmation_required' => true,
+            'required_capabilities' => ['READ', 'read'],
+        ]);
+        $serialized = $descriptor->toArray();
+        $serialized['summary'] = 'mutated';
+
+        $this->assertSame([
+            'identifier' => 'resource:resource.inspect',
+            'route' => 'resource',
+            'resource' => 'resource',
+            'action' => 'inspect',
+            'summary' => 'Inspect a resource',
+            'argument_shape' => ['type' => 'object', 'required' => ['name']],
+            'confirmation_required' => true,
+            'required_capabilities' => ['read'],
+            'available' => true,
+            'unavailable_reason' => null,
+        ], $descriptor->toArray());
+    }
+
+    public function testDescriptorsAreOrderedAndFilteredWithoutEmbeddingPolicy(): void
+    {
+        $handler = new class extends CommandHandler {
+            public function __construct()
+            {
+            }
+
+            public function availableCommands(): array
+            {
+                return ['help', 'echo'];
+            }
+        };
+        $processor = new class implements ICommandProcessor {
+            public function process(CommandRequest|\BlueFission\Wise\Cmd\Command|array|string $request): CommandResult
+            {
+                return CommandResult::completed('processed');
+            }
+
+            public function availableCommands(): array
+            {
+                return ['list item', 'inspect resource'];
+            }
+        };
+        $runtime = new CommandRuntime($processor, $handler);
+        $context = new RuntimeContext(commandPolicy: new CommandPolicy([
+            'resource:resource.inspect',
+            'native:help',
+        ]));
+        $descriptors = $runtime->descriptors($context);
+
+        $this->assertSame([
+            'native:help',
+            'resource:resource.inspect',
+        ], Arr::make($descriptors)->map(fn (array $descriptor): string => $descriptor['identifier'])->toArray());
+        $this->assertArrayNotHasKey('command_policy', $descriptors[0]);
+        $this->assertSame('native', $descriptors[0]['route']);
+        $this->assertSame('resource', $descriptors[1]['route']);
+        $this->assertSame([
+            'commands' => ['inspect resource'],
+            'native' => ['help'],
+            'script_extensions' => [],
+        ], $runtime->discover($context));
+    }
+
+    public function testDescriptorLookupReportsUnavailableRouteWithoutExecution(): void
+    {
+        $processor = $this->processor();
+        $runtime = new CommandRuntime($processor);
+
+        $descriptor = $runtime->descriptor('script:jss');
+
+        $this->assertFalse($descriptor->available());
+        $this->assertSame('script:jss', $descriptor->toArray()['identifier']);
+        $this->assertSame('script', $descriptor->toArray()['route']);
+        $this->assertSame('not_discovered', $descriptor->toArray()['unavailable_reason']);
+        $this->assertSame(0, $processor->calls);
     }
 
     private function processor(): ICommandProcessor
