@@ -126,7 +126,7 @@ jobs:
           php -r '$lock = json_decode(file_get_contents("composer.lock"), true, 512, JSON_THROW_ON_ERROR); foreach ($lock["packages"] as $package) { if ($package["name"] === "bluefission/wise") { exit(($package["source"]["reference"] ?? null) === getenv("EXPECTED_SHA") ? 0 : 1); } } exit(1);'
 
   publish:
-    name: Publish GitHub prerelease
+    name: Publish GitHub VCS prerelease
     needs:
       - verify
       - clean-consumer

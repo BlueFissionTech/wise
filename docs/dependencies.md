@@ -4,6 +4,14 @@ Wise consumes reviewed releases for runtime dependencies whenever a release is
 available. Development constraints are retained only while an upstream package
 has no consumable release.
 
+Wise alpha releases are distributed exclusively through immutable GitHub VCS
+tags and prerelease archives. The release workflow verifies package and empty
+consumer installs on PHP 8.2 and 8.3, but it does not publish Wise to
+Packagist. Registry publication is deferred until the required interpreter and
+authentication dependency graph has reviewed registry releases. Consumers must
+therefore use the VCS configuration below rather than expect Composer registry
+discovery for `bluefission/wise`.
+
 The current intelligence baseline is:
 
 - `bluefission/develation:~1.3.43.0`, held below `v1.3.44` until the released
@@ -46,6 +54,8 @@ composer require bluefission/wise:0.1.0-alpha.2
 Supply GitHub authentication through `COMPOSER_AUTH` or Composer's local auth
 configuration. Never commit a token to the consuming project.
 
-The release workflow installs each tag into an empty consumer project on PHP
-8.2 and 8.3, checks the public command and authentication contracts, and proves
-that Composer resolved `bluefission/wise` to the exact tagged source commit.
+The release workflow installs each VCS tag into an empty consumer project on
+PHP 8.2 and 8.3, checks the public command and authentication contracts, proves
+that Composer resolved `bluefission/wise` to the exact tagged source commit,
+and publishes a GitHub prerelease archive. It has no Packagist publication
+step.
