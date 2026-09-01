@@ -1,0 +1,161 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    env:
+      GH_REPO_TOKEN: ${{ secrets.BF_GITHUB_TOKEN != '' && secrets.BF_GITHUB_TOKEN || secrets.CI_GITHUB_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix:
+        php:
+          - '8.2'
+          - '8.3'
+
+    steps:
+      - name: Check out immutable tag
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Sanitize GitHub authentication
+        run: |
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          git config --local --unset-all credential.helper || true
+          git config --global --unset-all http.https://github.com/.extraheader || true
+          git config --global --unset-all credential.helper || true
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate release identity
+        shell: bash
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+$ ]]
+          php -r "require 'src/Wise/Version.php'; exit('v' . BlueFission\\Wise\\Version::CURRENT === getenv('GITHUB_REF_NAME') ? 0 : 1);"
+
+      - name: Validate Composer manifest
+        run: composer validate --strict --no-check-lock
+
+      - name: Check private dependency access
+        run: |
+          if [ -z "${GH_REPO_TOKEN:-}" ]; then
+            echo "::error::Set BF_GITHUB_TOKEN or CI_GITHUB_TOKEN so Composer can install private dependencies."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: |
+          export COMPOSER_AUTH="{\"github-oauth\":{\"github.com\":\"${GH_REPO_TOKEN}\"}}"
+          composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Verify authoritative PSR-4 autoloading
+        run: composer dump-autoload --classmap-authoritative --strict-psr
+
+      - name: Check platform requirements
+        run: composer check-platform-reqs
+
+      - name: Audit dependencies
+        run: composer audit
+
+      - name: Run test suite
+        run: vendor/bin/phpunit --do-not-cache-result
+
+  clean-consumer:
+    name: Clean consumer PHP ${{ matrix.php }}
+    needs: verify
+    runs-on: ubuntu-latest
+    env:
+      GH_REPO_TOKEN: ${{ secrets.BF_GITHUB_TOKEN != '' && secrets.BF_GITHUB_TOKEN || secrets.CI_GITHUB_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix:
+        php:
+          - '8.2'
+          - '8.3'
+
+    steps:
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Install immutable release from VCS
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          if [ -z "${GH_REPO_TOKEN:-}" ]; then
+            echo "::error::Set BF_GITHUB_TOKEN or CI_GITHUB_TOKEN so Composer can install private dependencies."
+            exit 1
+          fi
+
+          export COMPOSER_AUTH="{\"github-oauth\":{\"github.com\":\"${GH_REPO_TOKEN}\"}}"
+          composer init --name=bluefission/wise-consumer --no-interaction
+          composer config minimum-stability dev
+          composer config prefer-stable true
+          composer config repositories.wise vcs https://github.com/BlueFissionTech/wise.git
+          composer config repositories.jenerator vcs https://github.com/BlueFissionTech/jenerator.git
+          composer config repositories.vibrato vcs https://github.com/BlueFissionTech/vibrato.git
+          composer config repositories.presence vcs https://github.com/BlueFissionTech/presence.git
+          composer require "bluefission/wise:${RELEASE_VERSION#v}" --prefer-dist --no-interaction --no-progress
+          php -r "require 'vendor/autoload.php'; exit(class_exists('BlueFission\\Wise\\Version') && interface_exists('BlueFission\\Wise\\Cmd\\ICommandProcessor') && class_exists('BlueFission\\Wise\\Usr\\Auth\\PresenceIdentityBridge') ? 0 : 1);"
+          php -r '$lock = json_decode(file_get_contents("composer.lock"), true, 512, JSON_THROW_ON_ERROR); foreach ($lock["packages"] as $package) { if ($package["name"] === "bluefission/wise") { exit(($package["source"]["reference"] ?? null) === getenv("EXPECTED_SHA") ? 0 : 1); } } exit(1);'
+
+  publish:
+    name: Publish GitHub prerelease
+    needs:
+      - verify
+      - clean-consumer
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out immutable tag
+        uses: actions/checkout@v5
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+
+      - name: Build package archive
+        run: composer archive --format=zip --dir=dist
+
+      - name: Upload package archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: wise-${{ github.ref_name }}
+          path: dist/*.zip
+
+      - name: Create prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Wise $GITHUB_REF_NAME" \
+            --prerelease \
+            --generate-notes \
+            --verify-tag
