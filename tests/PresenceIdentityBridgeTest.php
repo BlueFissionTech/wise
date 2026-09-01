@@ -3,11 +3,10 @@
 namespace BlueFission\Tests;
 
 use BlueFission\DevElation as Dev;
-use BlueFission\Presence\Auth\AuthResult;
 use BlueFission\Presence\Bridge\BridgeContext;
 use BlueFission\Presence\Bridge\BridgeMiddleware;
+use BlueFission\Presence\Bridge\BridgeReason;
 use BlueFission\Presence\Session\Session;
-use BlueFission\Presence\Support\Context;
 use BlueFission\Presence\Support\EventNames;
 use BlueFission\Wise\Cmd\CommandRequest;
 use BlueFission\Wise\Usr\Auth\AuthOutcome;
@@ -24,85 +23,82 @@ final class PresenceIdentityBridgeTest extends TestCase
 
     public function testBindsAuthenticatedProfileToCanonicalPresenceContracts(): void
     {
-        $context = $this->context(AuthOutcome::success(
+        $outcome = AuthOutcome::success(
             new Profile('user-42', ['operator'], ['resource.execute']),
             [
                 'principal_type' => 'human',
                 'session_id' => 'session-1',
+                'tenant_id' => 'tenant-1',
                 'secret' => 'not-exported',
             ]
-        ));
-        $context->annex_manifest = [
+        );
+        $session = $this->session();
+        $bridge = new PresenceIdentityBridge($outcome, $session, [
             'strictness_level' => 2,
             'compliance' => ['internal'],
             'scopes' => ['terminal'],
-        ];
+        ]);
 
-        $result = (new BridgeMiddleware(new PresenceIdentityBridge()))->process($context);
+        $result = (new BridgeMiddleware($bridge))->process($this->context());
 
         $this->assertTrue($result->isBound());
-        $this->assertInstanceOf(AuthResult::class, $result->auth_result);
-        $this->assertTrue($result->auth_result->isSuccessful());
-        $this->assertSame('user-42', $result->auth_result->principal->id());
-        $this->assertSame('human', $result->auth_result->principal->type());
-        $this->assertTrue($result->auth_result->principal->roles()->has('operator'));
-        $this->assertTrue($result->auth_result->principal->permissions()->has('resource.execute'));
-        $this->assertInstanceOf(Session::class, $result->session);
-        $this->assertSame('session-1', $result->session->id());
-        $this->assertTrue($result->session->participants()->has('user-42'));
-        $this->assertSame(2, $result->trust_contract->strictness());
-        $this->assertSame($result->session, $result->context->session);
-        $this->assertArrayNotHasKey('secret', $result->metadata);
+        $this->assertSame(BridgeReason::BOUND, $result->reasonCode());
+        $this->assertSame('user-42', $result->principal()['id']);
+        $this->assertSame('human', $result->principal()['type']);
+        $this->assertContains('operator', $result->principal()['roles']);
+        $this->assertContains('resource.execute', $result->principal()['permissions']);
+        $this->assertSame('session-1', $result->sessionMetadata()['id']);
+        $this->assertSame('user-42', $result->sessionMetadata()['participant_id']);
+        $this->assertTrue($session->participants()->has('user-42'));
+        $this->assertSame(2, $result->metadata()['trust_contract']['strictness_level']);
+        $this->assertSame(['terminal'], $result->metadata()['trust_contract']['scopes']);
+        $this->assertArrayNotHasKey('secret', $result->metadata());
     }
 
     public function testDeniesUnauthenticatedIdentityWithoutMutatingHostRequest(): void
     {
         $continuation = CommandRequest::resume('continue-1', false, ['correlation_id' => 'corr-1']);
-        $context = $this->context(AuthOutcome::failure('credential_rejected'));
-        $context->request = $continuation;
-
-        $result = (new PresenceIdentityBridge())->bind($context);
+        $result = (new PresenceIdentityBridge(AuthOutcome::failure('credential_rejected')))
+            ->bind($this->context());
 
         $this->assertFalse($result->isBound());
-        $this->assertSame('credential_rejected', (string)$result->reason);
-        $this->assertFalse($result->auth_result->isSuccessful());
-        $this->assertSame($continuation, $context->request);
-        $this->assertTrue($context->request->isContinuation());
-        $this->assertFalse($context->request->approved());
+        $this->assertSame(BridgeReason::UNAUTHORIZED, $result->reasonCode());
+        $this->assertSame('credential_rejected', $result->metadata()['wise_reason']);
+        $this->assertTrue($continuation->isContinuation());
+        $this->assertFalse($continuation->approved());
+        $this->assertSame('continue-1', $continuation->continuationToken());
     }
 
     public function testFailsClosedForMissingOrConflictingSessionIdentity(): void
     {
         $outcome = AuthOutcome::success(new Profile('user-42'));
-        $missing = new BridgeContext();
-        $missing->host = 'wise';
-        $missing->authenticator = $outcome;
-
-        $missingResult = (new PresenceIdentityBridge())->bind($missing);
+        $missingResult = (new PresenceIdentityBridge($outcome))->bind(
+            $this->context(sessionId: '')
+        );
 
         $this->assertFalse($missingResult->isBound());
-        $this->assertSame('identity_session_missing', (string)$missingResult->reason);
+        $this->assertSame(BridgeReason::INVALID, $missingResult->reasonCode());
+        $this->assertSame('identity_session_missing', $missingResult->metadata()['wise_reason']);
 
-        $session = new Session('terminal');
-        $session->id = 'session-existing';
-        $conflicting = $this->context($outcome);
-        $conflicting->session = $session;
-        $conflicting->context()->session_id = 'session-other';
-
-        $conflictingResult = (new PresenceIdentityBridge())->bind($conflicting);
+        $session = $this->session('session-existing');
+        $conflictingResult = (new PresenceIdentityBridge($outcome, $session))->bind(
+            $this->context(sessionId: 'session-other')
+        );
 
         $this->assertFalse($conflictingResult->isBound());
-        $this->assertSame('identity_session_missing', (string)$conflictingResult->reason);
+        $this->assertSame(BridgeReason::INVALID, $conflictingResult->reasonCode());
+        $this->assertSame('identity_session_missing', $conflictingResult->metadata()['wise_reason']);
         $this->assertCount(0, $session->participants()->toArray());
     }
 
     public function testRepeatedBindingDoesNotDuplicateSessionParticipant(): void
     {
-        $session = new Session('terminal');
-        $session->id = 'session-1';
-        $context = $this->context(AuthOutcome::success(new Profile('user-42')));
-        $context->session = $session;
-        $bridge = new PresenceIdentityBridge();
+        $session = $this->session();
+        $bridge = new PresenceIdentityBridge(
+            AuthOutcome::success(new Profile('user-42')),
+            $session
+        );
+        $context = $this->context();
 
         $first = $bridge->bind($context);
         $second = $bridge->bind($context);
@@ -110,6 +106,18 @@ final class PresenceIdentityBridgeTest extends TestCase
         $this->assertTrue($first->isBound());
         $this->assertTrue($second->isBound());
         $this->assertCount(1, $session->participants()->toArray());
+    }
+
+    public function testRejectsTenantMismatchWithPackageOwnedReason(): void
+    {
+        $result = (new PresenceIdentityBridge(AuthOutcome::success(
+            new Profile('user-42'),
+            ['tenant_id' => 'tenant-other']
+        )))->bind($this->context());
+
+        $this->assertFalse($result->isBound());
+        $this->assertSame(BridgeReason::TENANT_MISMATCH, $result->reasonCode());
+        $this->assertSame('identity_tenant_mismatch', $result->metadata()['wise_reason']);
     }
 
     public function testDispatchesLifecycleHooksAndPresenceEvents(): void
@@ -128,29 +136,40 @@ final class PresenceIdentityBridgeTest extends TestCase
         }, EventNames::BRIDGE_BOUND);
         Dev::up();
 
-        $result = (new PresenceIdentityBridge())->bind($this->context(
-            AuthOutcome::success(new Profile('user-42'))
-        ));
+        $result = (new PresenceIdentityBridge(
+            AuthOutcome::success(new Profile('user-42')),
+            $this->session()
+        ))->bind($this->context());
 
         $this->assertTrue($result->isBound());
         $this->assertSame(['before', 'after'], $actions);
         $this->assertSame(['bound'], $events);
     }
 
-    private function context(AuthOutcome $outcome): BridgeContext
+    private function context(string $sessionId = 'session-1'): BridgeContext
     {
-        $presenceContext = new Context();
-        $presenceContext->action = 'terminal.command';
-        $presenceContext->session_id = 'session-1';
-        $presenceContext->session_type = 'terminal';
-        $presenceContext->tenant_id = 'tenant-1';
+        return new BridgeContext(
+            host: 'wise',
+            tenantId: 'tenant-1',
+            applicationId: 'terminal',
+            actorId: 'user-42',
+            sessionId: $sessionId,
+            correlationId: 'corr-1',
+            requestedPermissions: ['resource.execute'],
+            authenticationRevision: 'auth-1',
+            sessionRevision: 'session-revision-1',
+            metadata: [
+                'participant_id' => 'user-42',
+                'session_type' => 'terminal',
+            ]
+        );
+    }
 
-        $context = new BridgeContext();
-        $context->host = 'wise';
-        $context->authenticator = $outcome;
-        $context->presence_context = $presenceContext;
-        $context->metadata = ['participant_id' => 'user-42'];
+    private function session(string $id = 'session-1'): Session
+    {
+        $session = new Session('terminal');
+        $session->id = $id;
 
-        return $context;
+        return $session;
     }
 }

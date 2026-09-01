@@ -34,7 +34,7 @@
         "bluefission/automata": "^1.0.0-alpha.5",
         "bluefission/simpleclients": "^0.1.0-alpha",
         "bluefission/synthetiq": "^0.1.0-alpha.1",
-        "bluefission/presence": "dev-main",
+        "bluefission/presence": "0.1.0-alpha.3",
         "bluefission/jenerator": "^0.1.0-alpha.1",
         "bluefission/vibrato": "dev-main",
         "google/cloud-language": "^0.27.0",

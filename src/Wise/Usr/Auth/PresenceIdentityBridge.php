@@ -5,11 +5,12 @@ namespace BlueFission\Wise\Usr\Auth;
 use BlueFission\Arr;
 use BlueFission\DevElation as Dev;
 use BlueFission\Obj;
+use BlueFission\Presence\Annex\AnnexAdapter;
 use BlueFission\Presence\Annex\TrustContract;
-use BlueFission\Presence\Auth\AuthResult;
 use BlueFission\Presence\Auth\Principal;
 use BlueFission\Presence\Bridge\BridgeContext;
 use BlueFission\Presence\Bridge\BridgeInterface;
+use BlueFission\Presence\Bridge\BridgeReason;
 use BlueFission\Presence\Bridge\BridgeResult;
 use BlueFission\Presence\Policy\Permission;
 use BlueFission\Presence\Policy\Role;
@@ -35,6 +36,22 @@ final class PresenceIdentityBridge extends Obj implements BridgeInterface
         'token',
     ];
 
+    private AuthOutcome|AuthProviderInterface|Identity|null $authenticator;
+    private ?Session $session;
+    private array $annexManifest;
+
+    public function __construct(
+        AuthOutcome|AuthProviderInterface|Identity|null $authenticator = null,
+        ?Session $session = null,
+        array $annexManifest = []
+    ) {
+        parent::__construct();
+
+        $this->authenticator = $authenticator;
+        $this->session = $session;
+        $this->annexManifest = $annexManifest;
+    }
+
     public function name(): string
     {
         return 'wise.terminal.identity';
@@ -42,7 +59,7 @@ final class PresenceIdentityBridge extends Obj implements BridgeInterface
 
     public function supports(BridgeContext $context): bool
     {
-        return Str::lower(Str::trim((string)$context->host)) === self::HOST;
+        return Str::make($context->host())->trim()->lower()->val() === self::HOST;
     }
 
     public function bind(BridgeContext $context): BridgeResult
@@ -51,109 +68,145 @@ final class PresenceIdentityBridge extends Obj implements BridgeInterface
 
         try {
             if (!$this->supports($context)) {
-                return $this->failure($context, 'unsupported_host');
+                return $this->failure($context, BridgeReason::UNAVAILABLE, 'unsupported_host');
             }
 
-            $outcome = $this->authenticationOutcome($context);
+            if ($context->isExpired()) {
+                return $this->failure($context, BridgeReason::EXPIRED, 'identity_context_expired');
+            }
+
+            $outcome = $this->authenticationOutcome();
             if (!$outcome instanceof AuthOutcome || !$outcome->authenticated()) {
                 return $this->failure(
                     $context,
+                    BridgeReason::UNAUTHORIZED,
                     $outcome?->reason() ?: 'identity_not_authenticated',
                     $outcome?->metadata() ?? []
                 );
             }
 
             $profile = $outcome->profile();
-            if (!$profile instanceof Profile || Str::isEmpty(Str::trim($profile->id()))) {
-                return $this->failure($context, 'identity_principal_missing');
+            if (!$profile instanceof Profile || Str::make($profile->id())->trim()->isEmpty()) {
+                return $this->failure(
+                    $context,
+                    BridgeReason::INVALID,
+                    'identity_principal_missing'
+                );
+            }
+
+            if ($this->tenantConflicts($context, $outcome->metadata())) {
+                return $this->failure(
+                    $context,
+                    BridgeReason::TENANT_MISMATCH,
+                    'identity_tenant_mismatch',
+                    $outcome->metadata()
+                );
             }
 
             $principal = $this->principal($profile, $outcome->metadata());
-            $session = $this->session($context, $outcome->metadata());
+            $session = $this->resolveSession($context, $outcome->metadata());
             if (!$session instanceof Session) {
-                return $this->failure($context, 'identity_session_missing', $outcome->metadata());
+                return $this->failure(
+                    $context,
+                    BridgeReason::INVALID,
+                    'identity_session_missing',
+                    $outcome->metadata()
+                );
             }
             if ($session->isTerminated()) {
-                return $this->failure($context, 'identity_session_terminated', $outcome->metadata());
+                return $this->failure(
+                    $context,
+                    BridgeReason::EXPIRED,
+                    'identity_session_terminated',
+                    $outcome->metadata()
+                );
             }
 
             $participant = $this->participant($context, $session, $principal);
             if (!$participant instanceof Participant) {
-                return $this->failure($context, 'identity_session_ambiguous', $outcome->metadata());
+                return $this->failure(
+                    $context,
+                    BridgeReason::INVALID,
+                    'identity_session_ambiguous',
+                    $outcome->metadata()
+                );
             }
 
             $presenceContext = $context->context();
             $presenceContext->participant = $participant;
             $presenceContext->session = $session;
 
-            $trustContract = $this->trustContract($context);
+            $trustContract = $this->trustContract();
             if ($trustContract instanceof TrustContract) {
                 $trustContract->applyTo($presenceContext);
             }
 
-            $authResult = AuthResult::success($principal, metadata: $this->safeMetadata($outcome->metadata()));
-            $result = new BridgeResult();
-            $result->bound = true;
-            $result->context = $presenceContext;
-            $result->auth_result = $authResult;
-            $result->trust_contract = $trustContract;
-            $result->session = $session;
-            $result->reason = 'bound';
-            $result->metadata = Arr::merge($this->safeMetadata($outcome->metadata()), [
-                'bridge' => $this->name(),
-                'participant_id' => $participant->id(),
-                'session_id' => $session->id(),
-            ]);
+            $result = new BridgeResult(
+                bound: true,
+                reasonCode: BridgeReason::BOUND,
+                principal: $principal,
+                sessionMetadata: $this->sessionMetadata($context, $session, $participant),
+                authenticationRevision: $context->authenticationRevision(),
+                sessionRevision: $context->sessionRevision(),
+                issuedAt: $context->issuedAt(),
+                expiresAt: $context->expiresAt(),
+                metadata: Arr::merge($this->safeMetadata($outcome->metadata()), [
+                    'bridge' => $this->name(),
+                    'correlation_id' => $context->correlationId(),
+                    'trust_contract' => $this->trustMetadata($trustContract),
+                ])
+            );
 
             Dev::trigger(EventNames::BRIDGE_BOUND, [$result, $context, $this]);
             Dev::do(self::AFTER, [$result, $context, $this]);
 
             return $result;
         } catch (\Throwable $exception) {
-            return $this->failure($context, 'identity_bridge_failed', [
-                'exception' => $exception::class,
-            ]);
+            return $this->failure(
+                $context,
+                BridgeReason::UNAVAILABLE,
+                'identity_bridge_failed',
+                ['exception' => $exception::class]
+            );
         }
     }
 
-    private function authenticationOutcome(BridgeContext $context): ?AuthOutcome
+    private function authenticationOutcome(): ?AuthOutcome
     {
-        $authenticator = $context->authenticator;
-        if ($authenticator instanceof AuthOutcome) {
-            return $authenticator;
+        if ($this->authenticator instanceof AuthOutcome) {
+            return $this->authenticator;
         }
 
-        if ($authenticator instanceof AuthProviderInterface) {
-            if (!$authenticator->available() || !$authenticator->isAuthenticated()) {
+        if ($this->authenticator instanceof AuthProviderInterface) {
+            if (!$this->authenticator->available() || !$this->authenticator->isAuthenticated()) {
                 return AuthOutcome::failure('identity_not_authenticated');
             }
 
-            $profile = $authenticator->profile();
+            $profile = $this->authenticator->profile();
             return $profile instanceof Profile
                 ? AuthOutcome::success($profile)
                 : AuthOutcome::failure('identity_principal_missing');
         }
 
-        if ($authenticator instanceof Identity) {
-            return $authenticator->isAuthenticated()
-                ? AuthOutcome::success($authenticator->profile())
+        if ($this->authenticator instanceof Identity) {
+            return $this->authenticator->isAuthenticated()
+                ? AuthOutcome::success($this->authenticator->profile())
                 : AuthOutcome::failure('identity_not_authenticated');
         }
 
-        return $context->request instanceof AuthOutcome ? $context->request : null;
+        return null;
     }
 
     private function principal(Profile $profile, array $metadata): Principal
     {
         $principal = new Principal();
-        $principal->id = Str::trim($profile->id());
-        $principal->type = Str::isNotEmpty((string)Arr::getPath($metadata, 'principal_type'))
-            ? Str::trim((string)Arr::getPath($metadata, 'principal_type'))
-            : 'terminal_user';
+        $principal->id = Str::make($profile->id())->trim()->val();
+        $principalType = Str::make((string)Arr::getPath($metadata, 'principal_type'))->trim();
+        $principal->type = $principalType->isNotEmpty() ? $principalType->val() : 'terminal_user';
         $principal->attributes = $this->safeMetadata($metadata);
 
         Arr::make($profile->roles())->each(function ($roleName) use ($principal): void {
-            $name = Str::lower(Str::trim((string)$roleName));
+            $name = Str::make((string)$roleName)->trim()->lower()->val();
             if (Str::isEmpty($name)) {
                 return;
             }
@@ -163,7 +216,7 @@ final class PresenceIdentityBridge extends Obj implements BridgeInterface
         });
 
         Arr::make($profile->permissions())->each(function ($permissionName) use ($principal): void {
-            $name = Str::lower(Str::trim((string)$permissionName));
+            $name = Str::make((string)$permissionName)->trim()->lower()->val();
             if (Str::isEmpty($name)) {
                 return;
             }
@@ -175,37 +228,32 @@ final class PresenceIdentityBridge extends Obj implements BridgeInterface
         return $principal;
     }
 
-    private function session(BridgeContext $context, array $metadata): ?Session
+    private function resolveSession(BridgeContext $context, array $metadata): ?Session
     {
-        $presenceContext = $context->context();
-        $contextSessionId = Str::trim((string)$presenceContext->session_id);
-        $metadataSessionId = Str::trim((string)Arr::getPath($metadata, 'session_id'));
+        $contextSessionId = Str::make($context->sessionId())->trim()->val();
+        $metadataSessionId = Str::make((string)Arr::getPath($metadata, 'session_id'))->trim()->val();
         $sessionId = Str::isNotEmpty($contextSessionId) ? $contextSessionId : $metadataSessionId;
-        $session = $context->session;
 
-        if ($session instanceof Session) {
-            $existingId = Str::trim($session->id());
+        if ($this->session instanceof Session) {
+            $existingId = Str::make($this->session->id())->trim()->val();
             if (Str::isEmpty($existingId)
                 || (Str::isNotEmpty($sessionId) && $existingId !== $sessionId)) {
                 return null;
             }
-            $presenceContext->session_id = $existingId;
-            $presenceContext->session_type = $session->type();
-            return $session;
+
+            return $this->session;
         }
 
-        if (Val::isNotNull($session) || Str::isEmpty($sessionId)) {
+        if (Val::isNotNull($this->session) || Str::isEmpty($sessionId)) {
             return null;
         }
 
-        $sessionType = Str::trim((string)$presenceContext->session_type);
-        $session = new Session(Str::isNotEmpty($sessionType) ? $sessionType : 'terminal');
-        $session->id = $sessionId;
-        $session->metadata = $this->safeMetadata($metadata);
-        $presenceContext->session_id = $sessionId;
-        $presenceContext->session_type = $session->type();
+        $sessionType = Str::make((string)Arr::getPath($context->metadata(), 'session_type'))->trim();
+        $this->session = new Session($sessionType->isNotEmpty() ? $sessionType->val() : 'terminal');
+        $this->session->id = $sessionId;
+        $this->session->metadata = $this->safeMetadata($metadata);
 
-        return $session;
+        return $this->session;
     }
 
     private function participant(
@@ -213,8 +261,8 @@ final class PresenceIdentityBridge extends Obj implements BridgeInterface
         Session $session,
         Principal $principal
     ): ?Participant {
-        $metadata = Arr::is($context->metadata) ? $context->metadata : [];
-        $participantId = Str::trim((string)Arr::getPath($metadata, 'participant_id'));
+        $metadata = $context->metadata();
+        $participantId = Str::make((string)Arr::getPath($metadata, 'participant_id'))->trim()->val();
         $participantId = Str::isNotEmpty($participantId) ? $participantId : $principal->id();
         if (Str::isEmpty($participantId)) {
             return null;
@@ -243,41 +291,36 @@ final class PresenceIdentityBridge extends Obj implements BridgeInterface
         return $participant;
     }
 
-    private function trustContract(BridgeContext $context): ?TrustContract
+    private function trustContract(): ?TrustContract
     {
-        $manifest = Arr::is($context->annex_manifest) ? $context->annex_manifest : [];
-        if (Arr::isEmpty($manifest)) {
+        if (Arr::isEmpty($this->annexManifest)) {
             return null;
         }
 
-        $contract = new TrustContract();
-        $contract->manifest = $manifest;
-        Arr::make([
-            'strictness_level',
-            'compliance',
-            'data_residency',
-            'scopes',
-            'redaction_policy',
-        ])->each(function ($field) use ($contract, $manifest): void {
-            if (Arr::hasKey($manifest, (string)$field)) {
-                $contract->field((string)$field, $manifest[$field]);
-            }
-        });
-
-        return $contract;
+        return (new AnnexAdapter())->ingest($this->annexManifest);
     }
 
-    private function failure(BridgeContext $context, string $reason, array $metadata = []): BridgeResult
-    {
-        $result = new BridgeResult();
-        $result->bound = false;
-        $result->context = $context->context();
-        $result->auth_result = AuthResult::failure($reason, metadata: $this->safeMetadata($metadata));
-        $result->session = $context->session instanceof Session ? $context->session : null;
-        $result->reason = $reason;
-        $result->metadata = Arr::merge($this->safeMetadata($metadata), [
-            'bridge' => $this->name(),
-        ]);
+    private function failure(
+        BridgeContext $context,
+        string $reasonCode,
+        string $wiseReason,
+        array $metadata = []
+    ): BridgeResult {
+        $result = new BridgeResult(
+            bound: false,
+            reasonCode: $reasonCode,
+            sessionMetadata: $this->session instanceof Session
+                ? ['id' => $this->session->id(), 'type' => $this->session->type()]
+                : [],
+            authenticationRevision: $context->authenticationRevision(),
+            sessionRevision: $context->sessionRevision(),
+            issuedAt: $context->issuedAt(),
+            expiresAt: $context->expiresAt(),
+            metadata: Arr::merge($this->safeMetadata($metadata), [
+                'bridge' => $this->name(),
+                'wise_reason' => $wiseReason,
+            ])
+        );
 
         Dev::trigger(EventNames::BRIDGE_FAILED, [$result, $context, $this]);
         Dev::do(self::FAILURE, [$result, $context, $this]);
@@ -285,10 +328,52 @@ final class PresenceIdentityBridge extends Obj implements BridgeInterface
         return $result;
     }
 
+    private function tenantConflicts(BridgeContext $context, array $metadata): bool
+    {
+        $contextTenant = Str::make($context->tenantId())->trim()->val();
+        $identityTenant = Str::make((string)Arr::getPath($metadata, 'tenant_id'))->trim()->val();
+
+        return Str::isNotEmpty($contextTenant)
+            && Str::isNotEmpty($identityTenant)
+            && $contextTenant !== $identityTenant;
+    }
+
+    private function sessionMetadata(
+        BridgeContext $context,
+        Session $session,
+        Participant $participant
+    ): array {
+        return Arr::merge($this->safeMetadata(Arr::make($session->metadata)->toArray()), [
+            'id' => $session->id(),
+            'type' => $session->type(),
+            'participant_id' => $participant->id(),
+            'tenant_id' => $context->tenantId(),
+        ]);
+    }
+
+    private function trustMetadata(?TrustContract $contract): array
+    {
+        if (!$contract instanceof TrustContract) {
+            return [];
+        }
+
+        return [
+            'strictness_level' => $contract->strictness(),
+            'compliance' => (array)$contract->compliance,
+            'data_residency' => (array)$contract->data_residency,
+            'scopes' => (array)$contract->scopes,
+            'redaction_policy' => (array)$contract->redaction_policy,
+        ];
+    }
+
     private function safeMetadata(array $metadata): array
     {
         return Arr::make($metadata)
-            ->filter(fn ($value, $key) => !Arr::has(self::SENSITIVE_METADATA, Str::lower((string)$key), true))
+            ->filter(fn ($value, $key) => !Arr::has(
+                self::SENSITIVE_METADATA,
+                Str::make((string)$key)->lower()->val(),
+                true
+            ))
             ->toArray();
     }
 }

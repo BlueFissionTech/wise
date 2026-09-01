@@ -79,12 +79,16 @@ contracts. It does not authenticate credentials, prompt, render, resume a
 continuation, or mutate command results. Those responsibilities remain with the
 host.
 
-Create a Presence `BridgeContext` with `host` set to `wise`, place the current
-`AuthOutcome` or configured Wise authentication provider in `authenticator`, and
-provide one unambiguous Presence session through `session` or
-`presence_context.session_id`. Optional Annex metadata belongs in
-`annex_manifest`. The bridge fails closed when authentication, principal, or
-session state is missing or conflicting.
+The bridge consumes the reviewed Presence `0.1.0-alpha.3` VCS release. Wise does
+not define compatibility bridge types or depend on an unreleased Presence
+branch.
+
+Construct `PresenceIdentityBridge` with the current `AuthOutcome` or configured
+Wise authentication provider, an optional Presence session, and optional Annex
+manifest. Pass only opaque host, tenant, actor, session, correlation, revision,
+and sanitized metadata values through the immutable Presence `BridgeContext`.
+The bridge fails closed when authentication, principal, tenant, or session state
+is missing or conflicting and returns only immutable Presence result snapshots.
 
 Lifecycle integrations can observe `wise.identity.bridge.before`,
 `wise.identity.bridge.after`, and `wise.identity.bridge.failure` through
