@@ -3,6 +3,7 @@
 namespace BlueFission\Wise\Cli\Components;
 
 use BlueFission\Arr;
+use BlueFission\Wise\Version;
 
 class SplashScreen extends Component
 {
@@ -100,9 +101,11 @@ class SplashScreen extends Component
         $content .= PHP_EOL . "            ";
         $content .= "Workspace Intelligence Shell Environment";
         $content .= PHP_EOL . PHP_EOL;
-        $content .= "Running WISE version 0.0.1, produced by Blue Fission.";
+        $content .= 'Running WISE version ' . Version::CURRENT . ', produced by Blue Fission.';
         $content .= PHP_EOL;
-        $content .= "Jen interpreter running version 0.0.1." . PHP_EOL . PHP_EOL;
+        $content .= 'Jen interpreter running version '
+            . Version::package('bluefission/jenerator')
+            . '.' . PHP_EOL . PHP_EOL;
 
         $this->setContent($content);
     }
