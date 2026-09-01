@@ -37,7 +37,10 @@ composer config repositories.wise vcs https://github.com/BlueFissionTech/wise.gi
 composer config repositories.jenerator vcs https://github.com/BlueFissionTech/jenerator.git
 composer config repositories.vibrato vcs https://github.com/BlueFissionTech/vibrato.git
 composer config repositories.presence vcs https://github.com/BlueFissionTech/presence.git
-composer require bluefission/wise:0.1.0-alpha.1
+composer config --no-plugins allow-plugins.composer/installers true
+composer config --no-plugins allow-plugins.php-http/discovery true
+composer config --no-plugins allow-plugins.bluefission/bluecore true
+composer require bluefission/wise:0.1.0-alpha.2
 ```
 
 Supply GitHub authentication through `COMPOSER_AUTH` or Composer's local auth
