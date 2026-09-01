@@ -6,7 +6,7 @@ use Composer\InstalledVersions;
 
 final class Version
 {
-    public const CURRENT = '0.1.0-alpha.1';
+    public const CURRENT = '0.1.0-alpha.2';
 
     private function __construct()
     {

@@ -118,6 +118,9 @@ jobs:
           composer config repositories.jenerator vcs https://github.com/BlueFissionTech/jenerator.git
           composer config repositories.vibrato vcs https://github.com/BlueFissionTech/vibrato.git
           composer config repositories.presence vcs https://github.com/BlueFissionTech/presence.git
+          composer config --no-plugins allow-plugins.composer/installers true
+          composer config --no-plugins allow-plugins.php-http/discovery true
+          composer config --no-plugins allow-plugins.bluefission/bluecore true
           composer require "bluefission/wise:${RELEASE_VERSION#v}" --prefer-dist --no-interaction --no-progress
           php -r "require 'vendor/autoload.php'; exit(class_exists('BlueFission\\Wise\\Version') && interface_exists('BlueFission\\Wise\\Cmd\\ICommandProcessor') && class_exists('BlueFission\\Wise\\Usr\\Auth\\PresenceIdentityBridge') ? 0 : 1);"
           php -r '$lock = json_decode(file_get_contents("composer.lock"), true, 512, JSON_THROW_ON_ERROR); foreach ($lock["packages"] as $package) { if ($package["name"] === "bluefission/wise") { exit(($package["source"]["reference"] ?? null) === getenv("EXPECTED_SHA") ? 0 : 1); } } exit(1);'
