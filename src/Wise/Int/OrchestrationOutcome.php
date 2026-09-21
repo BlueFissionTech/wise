@@ -26,6 +26,7 @@ class OrchestrationOutcome extends Obj
     private Arr $lineage;
     private Arr $budgets;
     private Arr $lifecycle;
+    private Arr $execution;
     private Arr $diagnostics;
 
     public function __construct(array $data = [])
@@ -48,6 +49,7 @@ class OrchestrationOutcome extends Obj
         $this->lineage = Arr::make(Arr::is($data['lineage'] ?? null) ? $data['lineage'] : []);
         $this->budgets = Arr::make(Arr::is($data['budgets'] ?? null) ? $data['budgets'] : []);
         $this->lifecycle = Arr::make(Arr::is($data['lifecycle'] ?? null) ? $data['lifecycle'] : []);
+        $this->execution = Arr::make(Arr::is($data['execution'] ?? null) ? $data['execution'] : []);
         $this->diagnostics = Arr::make(Arr::is($data['diagnostics'] ?? null) ? $data['diagnostics'] : []);
     }
 
@@ -157,6 +159,11 @@ class OrchestrationOutcome extends Obj
         return $this->lifecycle->toArray();
     }
 
+    public function execution(): array
+    {
+        return $this->execution->toArray();
+    }
+
     public function diagnostics(): array
     {
         return $this->diagnostics->toArray();
@@ -185,6 +192,7 @@ class OrchestrationOutcome extends Obj
             'lineage' => $this->lineage(),
             'budgets' => $this->budgets(),
             'lifecycle' => $this->lifecycle(),
+            'execution' => $this->execution(),
             'diagnostics' => $this->diagnostics(),
         ] as $key => $value) {
             if ($value !== []) {

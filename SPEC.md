@@ -132,6 +132,12 @@ unsupported. Callers must not infer those guarantees from an upstream feature
 descriptor. Provider-side learning or ranking may advise selection only and
 cannot authorize commands or effects.
 
+Outcome execution evidence distinguishes a host termination request from a
+host-confirmed stop. When termination cannot be confirmed, the outcome keeps
+the execution state uncertain and preserves in-flight evidence. Effect
+authorization and idempotency remain host-owned, and terminal outcomes must
+not attribute later state writes or effects.
+
 ### Compatibility and conformance
 
 Existing request constructors and outcome accessors remain valid. New request

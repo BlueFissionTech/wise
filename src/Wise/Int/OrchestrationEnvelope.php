@@ -78,6 +78,10 @@ final class OrchestrationEnvelope extends Obj
         array $diagnostics = []
     ): array {
         $persona = $this->request->persona()->toArray();
+        $execution = is_array($hostResult['execution'] ?? null)
+            ? $hostResult['execution']
+            : [];
+        unset($hostResult['execution']);
 
         return array_merge($hostResult, [
             'contract' => $this->contract(),
@@ -91,6 +95,7 @@ final class OrchestrationEnvelope extends Obj
             'lineage' => $this->request->lineage(),
             'budgets' => $this->request->budgets(),
             'lifecycle' => $this->lifecycle(),
+            'execution' => $this->normalizeExecution($execution),
             'diagnostics' => array_values($diagnostics),
         ]);
     }
@@ -122,6 +127,44 @@ final class OrchestrationEnvelope extends Obj
             'code' => $this->nullableString($result['code'] ?? null),
             'evidence' => is_array($result['evidence'] ?? null) ? $result['evidence'] : [],
             'metadata' => is_array($result['metadata'] ?? null) ? $result['metadata'] : [],
+        ];
+    }
+
+    private function normalizeExecution(array $execution): array
+    {
+        $termination = is_array($execution['termination'] ?? null)
+            ? $execution['termination']
+            : [];
+        $evidence = is_array($execution['evidence'] ?? null)
+            ? $execution['evidence']
+            : [];
+        $effects = is_array($execution['effects'] ?? null)
+            ? $execution['effects']
+            : [];
+
+        return [
+            'state' => $this->nullableString($execution['state'] ?? null),
+            'termination' => [
+                'reason' => $this->nullableString($termination['reason'] ?? null),
+                'requested' => (bool)($termination['requested'] ?? false),
+                'confirmed_stopped' => (bool)($termination['confirmed_stopped'] ?? false),
+                'mechanism' => $this->nullableString($termination['mechanism'] ?? null),
+            ],
+            'evidence' => [
+                'in_flight' => is_array($evidence['in_flight'] ?? null)
+                    ? array_values($evidence['in_flight'])
+                    : [],
+                'uncertain' => is_array($evidence['uncertain'] ?? null)
+                    ? array_values($evidence['uncertain'])
+                    : [],
+            ],
+            'effects' => [
+                'authorization_owner' => 'host',
+                'idempotency_owner' => 'host',
+                'attributed_after_terminal' => is_array($effects['attributed_after_terminal'] ?? null)
+                    ? array_values($effects['attributed_after_terminal'])
+                    : [],
+            ],
         ];
     }
 

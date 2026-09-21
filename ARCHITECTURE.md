@@ -77,6 +77,12 @@ ranking, or advice cannot widen permissions. The current lifecycle explicitly
 does not promise cancellation, streaming, resume, automatic effect retries, or
 exactly-once effects.
 
+Execution receipts separately record host-requested termination, confirmed
+stop evidence, and uncertain in-flight work. These receipts do not turn
+provider feature discovery into authority: effect authorization and
+idempotency remain host-owned, and no effect is attributed after a denied or
+confirmed terminal boundary.
+
 The Automata adapter records the installed `bluefission/automata` version and
 the released `AgentIntegrationContract` version at runtime. It records only
 feature identifiers actually bound by the adapter and does not translate

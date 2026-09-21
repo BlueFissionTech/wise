@@ -174,4 +174,69 @@ final class AutomataOrchestratorTest extends TestCase
             'unsupported' => ['unavailable', 'unsupported', 'provider_unavailable'],
         ];
     }
+
+    public function testProviderFreeResourceLimitFixturesKeepTerminationEvidenceHostOwned(): void
+    {
+        $envelope = new OrchestrationEnvelope(new OrchestrationRequest(
+            'run within a bounded budget',
+            new Profile('agent-1'),
+            lineage: [
+                'trace_id' => 'trace-limit',
+                'correlation_id' => 'correlation-limit',
+                'causation_id' => 'causation-limit',
+            ],
+            budgets: ['duration_ms' => 250]
+        ));
+
+        $confirmed = new OrchestrationOutcome($envelope->outcome([
+            'status' => 'failed',
+            'execution' => [
+                'state' => 'stopped',
+                'termination' => [
+                    'reason' => 'resource_limit',
+                    'requested' => true,
+                    'confirmed_stopped' => true,
+                    'mechanism' => 'host_budget_guard',
+                ],
+                'effects' => ['attributed_after_terminal' => []],
+            ],
+        ], [
+            'status' => 'failed',
+            'code' => 'resource_limit',
+        ]));
+
+        $unsupported = new OrchestrationOutcome($envelope->outcome([
+            'status' => 'unavailable',
+            'execution' => [
+                'state' => 'uncertain',
+                'termination' => [
+                    'reason' => 'cancellation_requested',
+                    'requested' => true,
+                    'confirmed_stopped' => false,
+                    'mechanism' => 'unsupported',
+                ],
+                'evidence' => [
+                    'in_flight' => ['worker-1'],
+                    'uncertain' => ['termination_confirmation'],
+                ],
+                'effects' => ['attributed_after_terminal' => []],
+            ],
+        ], [
+            'status' => 'unsupported',
+            'code' => 'cancellation_unsupported',
+        ]));
+
+        $this->assertTrue($confirmed->execution()['termination']['requested']);
+        $this->assertTrue($confirmed->execution()['termination']['confirmed_stopped']);
+        $this->assertSame('host_budget_guard', $confirmed->execution()['termination']['mechanism']);
+        $this->assertSame([], $confirmed->execution()['effects']['attributed_after_terminal']);
+
+        $this->assertFalse($unsupported->execution()['termination']['confirmed_stopped']);
+        $this->assertSame(['worker-1'], $unsupported->execution()['evidence']['in_flight']);
+        $this->assertSame(['termination_confirmation'], $unsupported->execution()['evidence']['uncertain']);
+        $this->assertSame('host', $unsupported->execution()['effects']['authorization_owner']);
+        $this->assertSame('host', $unsupported->execution()['effects']['idempotency_owner']);
+        $this->assertSame([], $unsupported->execution()['effects']['attributed_after_terminal']);
+        $this->assertSame('unsupported', $unsupported->lifecycle()['cancellation']);
+    }
 }
