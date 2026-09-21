@@ -19,6 +19,14 @@ class OrchestrationOutcome extends Obj
     private Arr $persona;
     private Str $sessionId;
     private Arr $state;
+    private Arr $contract;
+    private Arr $provider;
+    private Arr $providerResult;
+    private Arr $subject;
+    private Arr $lineage;
+    private Arr $budgets;
+    private Arr $lifecycle;
+    private Arr $diagnostics;
 
     public function __construct(array $data = [])
     {
@@ -33,6 +41,14 @@ class OrchestrationOutcome extends Obj
         $this->persona = Arr::make(Arr::is($data['persona'] ?? null) ? $data['persona'] : []);
         $this->sessionId = Str::make((string)($data['session_id'] ?? ''));
         $this->state = Arr::make(Arr::is($data['state'] ?? null) ? $data['state'] : []);
+        $this->contract = Arr::make(Arr::is($data['contract'] ?? null) ? $data['contract'] : []);
+        $this->provider = Arr::make(Arr::is($data['provider'] ?? null) ? $data['provider'] : []);
+        $this->providerResult = Arr::make(Arr::is($data['provider_result'] ?? null) ? $data['provider_result'] : []);
+        $this->subject = Arr::make(Arr::is($data['subject'] ?? null) ? $data['subject'] : []);
+        $this->lineage = Arr::make(Arr::is($data['lineage'] ?? null) ? $data['lineage'] : []);
+        $this->budgets = Arr::make(Arr::is($data['budgets'] ?? null) ? $data['budgets'] : []);
+        $this->lifecycle = Arr::make(Arr::is($data['lifecycle'] ?? null) ? $data['lifecycle'] : []);
+        $this->diagnostics = Arr::make(Arr::is($data['diagnostics'] ?? null) ? $data['diagnostics'] : []);
     }
 
     public static function unavailable(): self
@@ -106,9 +122,49 @@ class OrchestrationOutcome extends Obj
         return $this->state->toArray();
     }
 
+    public function contract(): array
+    {
+        return $this->contract->toArray();
+    }
+
+    public function provider(): array
+    {
+        return $this->provider->toArray();
+    }
+
+    public function providerResult(): array
+    {
+        return $this->providerResult->toArray();
+    }
+
+    public function subject(): array
+    {
+        return $this->subject->toArray();
+    }
+
+    public function lineage(): array
+    {
+        return $this->lineage->toArray();
+    }
+
+    public function budgets(): array
+    {
+        return $this->budgets->toArray();
+    }
+
+    public function lifecycle(): array
+    {
+        return $this->lifecycle->toArray();
+    }
+
+    public function diagnostics(): array
+    {
+        return $this->diagnostics->toArray();
+    }
+
     public function toArray(): array
     {
-        return [
+        $data = [
             'status' => $this->status(),
             'pattern' => $this->pattern(),
             'output' => $this->output(),
@@ -120,5 +176,22 @@ class OrchestrationOutcome extends Obj
             'session_id' => $this->sessionId(),
             'state' => $this->state(),
         ];
+
+        foreach ([
+            'contract' => $this->contract(),
+            'provider' => $this->provider(),
+            'provider_result' => $this->providerResult(),
+            'subject' => $this->subject(),
+            'lineage' => $this->lineage(),
+            'budgets' => $this->budgets(),
+            'lifecycle' => $this->lifecycle(),
+            'diagnostics' => $this->diagnostics(),
+        ] as $key => $value) {
+            if ($value !== []) {
+                $data[$key] = $value;
+            }
+        }
+
+        return $data;
     }
 }

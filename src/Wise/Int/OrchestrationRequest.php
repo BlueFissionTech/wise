@@ -18,6 +18,8 @@ class OrchestrationRequest extends Obj
     private Arr $capabilities;
     private Arr $state;
     private Arr $config;
+    private Arr $lineage;
+    private Arr $budgets;
 
     public function __construct(
         string $task,
@@ -28,7 +30,9 @@ class OrchestrationRequest extends Obj
         array $capabilities = [],
         array $state = [],
         array $config = [],
-        ?string $sessionId = null
+        ?string $sessionId = null,
+        array $lineage = [],
+        array $budgets = []
     ) {
         parent::__construct();
         $this->task = Str::make($task)->trim();
@@ -42,6 +46,8 @@ class OrchestrationRequest extends Obj
         $this->capabilities = Arr::make($capabilities);
         $this->state = Arr::make($state);
         $this->config = Arr::make($config);
+        $this->lineage = Arr::make($lineage);
+        $this->budgets = Arr::make($budgets);
     }
 
     public function task(): string
@@ -87,5 +93,32 @@ class OrchestrationRequest extends Obj
     public function config(): array
     {
         return $this->config->toArray();
+    }
+
+    public function lineage(): array
+    {
+        $lineage = $this->lineage->toArray();
+
+        return [
+            'trace_id' => $this->nullableString($lineage['trace_id'] ?? null),
+            'correlation_id' => $this->nullableString($lineage['correlation_id'] ?? null),
+            'causation_id' => $this->nullableString($lineage['causation_id'] ?? null),
+        ];
+    }
+
+    public function budgets(): array
+    {
+        return $this->budgets->toArray();
+    }
+
+    private function nullableString(mixed $value): ?string
+    {
+        if (!is_scalar($value)) {
+            return null;
+        }
+
+        $value = trim((string)$value);
+
+        return $value !== '' ? $value : null;
     }
 }

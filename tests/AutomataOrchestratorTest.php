@@ -4,9 +4,12 @@ namespace BlueFission\Tests;
 
 use BlueFission\Wise\Int\AutomataOrchestrator;
 use BlueFission\Wise\Int\NullOrchestrator;
+use BlueFission\Wise\Int\OrchestrationEnvelope;
+use BlueFission\Wise\Int\OrchestrationOutcome;
 use BlueFission\Wise\Int\OrchestrationRequest;
 use BlueFission\Wise\Int\PersonaContext;
 use BlueFission\Wise\Usr\Profile;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class AutomataOrchestratorTest extends TestCase
@@ -46,7 +49,10 @@ final class AutomataOrchestratorTest extends TestCase
             new Profile('agent-1', ['operator']),
             workers: [
                 'plan' => static fn (array $context): array => [
-                    'output' => ['steps' => ['inspect', 'change', 'verify']],
+                    'output' => [
+                        'steps' => ['inspect', 'change', 'verify'],
+                        'contract_version' => $context['wise_envelope']['contract']['version'] ?? null,
+                    ],
                     'confidence' => 0.9,
                 ],
                 'verify' => static fn (array $context, array $prior): array => [
@@ -73,8 +79,13 @@ final class AutomataOrchestratorTest extends TestCase
         $this->assertSame('agent-1', $outcome->persona()['id']);
         $this->assertCount(2, $outcome->workerResults());
         $this->assertTrue($outcome->output()['verify']['verified']);
+        $this->assertSame(OrchestrationEnvelope::CONTRACT_VERSION, $outcome->output()['plan']['contract_version']);
         $this->assertSame('prepare and verify a change', $outcome->state()['channels']['observations']['task']);
         $this->assertSame('agent-1', $outcome->state()['channels']['rules']['persona']['id']);
+        $this->assertSame('automata', $outcome->provider()['name']);
+        $this->assertSame('1.5.0', $outcome->provider()['contract']['version']);
+        $this->assertSame('completed', $outcome->providerResult()['status']);
+        $this->assertSame('unsupported', $outcome->lifecycle()['cancellation']);
     }
 
     public function testAutomataOrchestrationCanBeDisabled(): void
@@ -100,6 +111,8 @@ final class AutomataOrchestratorTest extends TestCase
         $this->assertSame('failed', $outcome->status());
         $this->assertSame('automata_orchestration_failed', $outcome->metadata()['reason']);
         $this->assertSame(\RuntimeException::class, $outcome->metadata()['exception']);
+        $this->assertSame('provider_exception', $outcome->providerResult()['code']);
+        $this->assertSame('provider_exception', $outcome->diagnostics()[0]['code']);
         $this->assertStringNotContainsString('runtime details', json_encode($outcome->toArray()));
     }
 
@@ -111,5 +124,54 @@ final class AutomataOrchestratorTest extends TestCase
 
         $this->assertSame('failed', $outcome->status());
         $this->assertSame('invalid_automata_orchestrator', $outcome->metadata()['reason']);
+    }
+
+    #[DataProvider('providerFreeOutcomeFixtures')]
+    public function testProviderFreeEnvelopeKeepsHostAndProviderStatusesSeparate(
+        string $hostStatus,
+        string $providerStatus,
+        ?string $providerCode
+    ): void {
+        $request = new OrchestrationRequest(
+            'inspect the workspace',
+            new Profile('agent-1', ['operator']),
+            workers: ['inspect' => static fn (): array => []],
+            capabilities: ['resource.read'],
+            sessionId: 'session-1',
+            lineage: [
+                'trace_id' => 'trace-1',
+                'correlation_id' => 'correlation-1',
+                'causation_id' => 'causation-1',
+            ],
+            budgets: ['attempts' => 1]
+        );
+        $envelope = new OrchestrationEnvelope($request);
+
+        $outcome = new OrchestrationOutcome($envelope->outcome([
+            'status' => $hostStatus,
+        ], [
+            'status' => $providerStatus,
+            'code' => $providerCode,
+        ]));
+
+        $this->assertSame(OrchestrationEnvelope::CONTRACT_VERSION, $outcome->contract()['version']);
+        $this->assertSame($hostStatus, $outcome->status());
+        $this->assertSame($providerStatus, $outcome->providerResult()['status']);
+        $this->assertSame($providerCode, $outcome->providerResult()['code']);
+        $this->assertSame('agent-1', $outcome->subject()['id']);
+        $this->assertSame('trace-1', $outcome->lineage()['trace_id']);
+        $this->assertSame(['attempts' => 1], $outcome->budgets());
+        $this->assertSame('unsupported', $outcome->lifecycle()['streaming']);
+        $this->assertSame(['inspect'], $envelope->request()['request']['worker_ids']);
+    }
+
+    public static function providerFreeOutcomeFixtures(): array
+    {
+        return [
+            'normal' => ['completed', 'completed', null],
+            'error' => ['failed', 'failed', 'provider_error'],
+            'denied' => ['failed', 'denied', 'capability_denied'],
+            'unsupported' => ['unavailable', 'unsupported', 'provider_unavailable'],
+        ];
     }
 }

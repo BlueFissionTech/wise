@@ -3,6 +3,7 @@
 namespace BlueFission\Wise\Int;
 
 use BlueFission\Arr;
+use BlueFission\Automata\LLM\Agent\Integration\AgentIntegrationContract;
 use BlueFission\Automata\LLM\Agent\AgentSession;
 use BlueFission\Automata\LLM\Agent\Orchestration\OrchestrationConfig;
 use BlueFission\Automata\LLM\Agent\Orchestration\Orchestrator;
@@ -11,6 +12,7 @@ use BlueFission\DevElation as Dev;
 use BlueFission\Func;
 use BlueFission\Obj;
 use BlueFission\Str;
+use Composer\InstalledVersions;
 
 class AutomataOrchestrator extends Obj implements IOrchestrator
 {
@@ -35,8 +37,16 @@ class AutomataOrchestrator extends Obj implements IOrchestrator
 
     public function orchestrate(OrchestrationRequest $request): OrchestrationOutcome
     {
+        $envelope = new OrchestrationEnvelope($request, $this->providerIdentity());
+
         if (!$this->available()) {
-            return OrchestrationOutcome::unavailable();
+            return new OrchestrationOutcome($envelope->outcome([
+                'status' => 'unavailable',
+                'metadata' => ['reason' => 'automata_orchestration_unavailable'],
+            ], [
+                'status' => 'unsupported',
+                'code' => 'provider_unavailable',
+            ]));
         }
 
         $persona = $request->persona()->toArray();
@@ -64,6 +74,7 @@ class AutomataOrchestrator extends Obj implements IOrchestrator
                 'context' => $session->context(),
             ],
             'state' => $state->snapshot(),
+            'wise_envelope' => $envelope->request(),
         ])->toArray();
         $config = Arr::make($request->config())->merge([
             'pattern' => $request->pattern() ?: OrchestrationConfig::SEQUENTIAL,
@@ -75,24 +86,75 @@ class AutomataOrchestrator extends Obj implements IOrchestrator
         try {
             $orchestrator = ($this->factory)($config);
             if (!($orchestrator instanceof Orchestrator)) {
-                return OrchestrationOutcome::failure('invalid_automata_orchestrator');
+                return new OrchestrationOutcome($envelope->outcome([
+                    'status' => 'failed',
+                    'metadata' => ['reason' => 'invalid_automata_orchestrator'],
+                ], [
+                    'status' => 'failed',
+                    'code' => 'invalid_provider',
+                ]));
             }
             $data = $orchestrator->run($input)->toArray();
         } catch (\Throwable $exception) {
-            $outcome = OrchestrationOutcome::failure('automata_orchestration_failed', [
-                'exception' => $exception::class,
-            ]);
+            $outcome = new OrchestrationOutcome($envelope->outcome([
+                'status' => 'failed',
+                'metadata' => [
+                    'reason' => 'automata_orchestration_failed',
+                    'exception' => $exception::class,
+                ],
+            ], [
+                'status' => 'failed',
+                'code' => 'provider_exception',
+            ], [[
+                'code' => 'provider_exception',
+                'exception_type' => $exception::class,
+            ]]));
             Dev::do('wise.int.orchestration.failed', [$outcome]);
             return $outcome;
         }
 
-        $outcome = new OrchestrationOutcome(Arr::make($data)->merge([
+        $hostResult = Arr::make($data)->merge([
             'persona' => $persona,
             'session_id' => $session->id(),
             'state' => $state->snapshot(),
-        ])->toArray());
+        ])->toArray();
+        $outcome = new OrchestrationOutcome($envelope->outcome($hostResult, [
+            'status' => $data['status'] ?? null,
+            'code' => $data['code'] ?? ($data['reason_code'] ?? null),
+            'evidence' => is_array($data['evidence'] ?? null) ? $data['evidence'] : [],
+            'metadata' => is_array($data['metadata'] ?? null) ? $data['metadata'] : [],
+        ], is_array($data['diagnostics'] ?? null) ? $data['diagnostics'] : []));
         Dev::do('wise.int.orchestration.after', [$outcome]);
 
         return $outcome;
+    }
+
+    private function providerIdentity(): array
+    {
+        $version = null;
+        if (class_exists(InstalledVersions::class)
+            && InstalledVersions::isInstalled('bluefission/automata')) {
+            $version = InstalledVersions::getPrettyVersion('bluefission/automata');
+        }
+
+        $contract = [
+            'name' => 'automata.agent.integration',
+            'version' => null,
+            'features' => [],
+        ];
+        if (class_exists(AgentIntegrationContract::class)) {
+            $contract['version'] = AgentIntegrationContract::VERSION;
+            $contract['features'] = [
+                AgentIntegrationContract::FEATURE_ORCHESTRATION,
+                AgentIntegrationContract::FEATURE_SESSION,
+            ];
+        }
+
+        return [
+            'name' => 'automata',
+            'source' => 'bluefission/automata',
+            'version' => $version,
+            'contract' => $contract,
+        ];
     }
 }

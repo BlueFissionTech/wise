@@ -13,6 +13,14 @@ class NullOrchestrator extends Obj implements IOrchestrator
 
     public function orchestrate(OrchestrationRequest $request): OrchestrationOutcome
     {
-        return OrchestrationOutcome::unavailable();
+        $envelope = new OrchestrationEnvelope($request);
+
+        return new OrchestrationOutcome($envelope->outcome([
+            'status' => 'unavailable',
+            'metadata' => ['reason' => 'automata_orchestration_unavailable'],
+        ], [
+            'status' => 'unsupported',
+            'code' => 'provider_unavailable',
+        ]));
     }
 }
