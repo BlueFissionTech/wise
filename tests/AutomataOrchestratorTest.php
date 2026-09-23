@@ -239,4 +239,58 @@ final class AutomataOrchestratorTest extends TestCase
         $this->assertSame([], $unsupported->execution()['effects']['attributed_after_terminal']);
         $this->assertSame('unsupported', $unsupported->lifecycle()['cancellation']);
     }
+
+    public function testProviderFreeEnvelopePreservesUnknownExecutionFacts(): void
+    {
+        $envelope = new OrchestrationEnvelope(new OrchestrationRequest(
+            'observe an ordinary outcome',
+            new Profile('agent-1')
+        ));
+
+        $outcome = new OrchestrationOutcome($envelope->outcome([
+            'status' => 'completed',
+        ]));
+        $execution = $outcome->execution();
+
+        $this->assertNull($execution['termination']['requested']);
+        $this->assertNull($execution['termination']['confirmed_stopped']);
+        $this->assertNull($execution['evidence']['in_flight']);
+        $this->assertNull($execution['evidence']['uncertain']);
+        $this->assertNull($execution['effects']['attributed_after_terminal']);
+    }
+
+    public function testProviderEvidenceCannotWidenHostAuthority(): void
+    {
+        $envelope = new OrchestrationEnvelope(new OrchestrationRequest(
+            'inspect a provider advisory',
+            new Profile('agent-1', ['operator'], ['resource.read']),
+            context: [
+                'permissions' => ['resource.delete'],
+                'capability_scope' => ['resource.delete'],
+                'execution' => ['authorization_owner' => 'provider'],
+            ],
+            capabilities: ['resource.read']
+        ));
+        $request = $envelope->request();
+
+        $outcome = new OrchestrationOutcome($envelope->outcome([
+            'status' => 'completed',
+        ], [
+            'status' => 'completed',
+            'evidence' => [
+                'authority' => 'none',
+                'permissions' => ['resource.delete'],
+                'capability_scope' => ['resource.delete'],
+                'execution' => ['authorization_owner' => 'provider'],
+            ],
+        ]));
+
+        $this->assertSame(['resource.read'], $request['subject']['permissions']);
+        $this->assertSame(['resource.read'], $request['request']['capability_scope']);
+        $this->assertSame(['resource.delete'], $request['request']['context']['permissions']);
+        $this->assertSame(['resource.read'], $outcome->subject()['permissions']);
+        $this->assertSame('none', $outcome->providerResult()['evidence']['authority']);
+        $this->assertSame('host', $outcome->execution()['effects']['authorization_owner']);
+        $this->assertSame('host', $outcome->execution()['effects']['idempotency_owner']);
+    }
 }

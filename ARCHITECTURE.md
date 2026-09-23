@@ -81,7 +81,8 @@ Execution receipts separately record host-requested termination, confirmed
 stop evidence, and uncertain in-flight work. These receipts do not turn
 provider feature discovery into authority: effect authorization and
 idempotency remain host-owned, and no effect is attributed after a denied or
-confirmed terminal boundary.
+confirmed terminal boundary. Missing execution facts remain `null` rather than
+being normalized into negative or empty evidence.
 
 The Automata adapter records the installed `bluefission/automata` version and
 the released `AgentIntegrationContract` version at runtime. It records only

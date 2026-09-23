@@ -136,7 +136,9 @@ Outcome execution evidence distinguishes a host termination request from a
 host-confirmed stop. When termination cannot be confirmed, the outcome keeps
 the execution state uncertain and preserves in-flight evidence. Effect
 authorization and idempotency remain host-owned, and terminal outcomes must
-not attribute later state writes or effects.
+not attribute later state writes or effects. Omitted termination, evidence,
+and effect-attribution fields remain unknown; `false` and empty collections
+represent only facts supplied explicitly by the host.
 
 ### Compatibility and conformance
 

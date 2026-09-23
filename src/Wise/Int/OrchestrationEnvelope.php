@@ -146,26 +146,33 @@ final class OrchestrationEnvelope extends Obj
             'state' => $this->nullableString($execution['state'] ?? null),
             'termination' => [
                 'reason' => $this->nullableString($termination['reason'] ?? null),
-                'requested' => (bool)($termination['requested'] ?? false),
-                'confirmed_stopped' => (bool)($termination['confirmed_stopped'] ?? false),
+                'requested' => $this->nullableBool($termination, 'requested'),
+                'confirmed_stopped' => $this->nullableBool($termination, 'confirmed_stopped'),
                 'mechanism' => $this->nullableString($termination['mechanism'] ?? null),
             ],
             'evidence' => [
                 'in_flight' => is_array($evidence['in_flight'] ?? null)
                     ? array_values($evidence['in_flight'])
-                    : [],
+                    : null,
                 'uncertain' => is_array($evidence['uncertain'] ?? null)
                     ? array_values($evidence['uncertain'])
-                    : [],
+                    : null,
             ],
             'effects' => [
                 'authorization_owner' => 'host',
                 'idempotency_owner' => 'host',
                 'attributed_after_terminal' => is_array($effects['attributed_after_terminal'] ?? null)
                     ? array_values($effects['attributed_after_terminal'])
-                    : [],
+                    : null,
             ],
         ];
+    }
+
+    private function nullableBool(array $values, string $key): ?bool
+    {
+        return array_key_exists($key, $values) && is_bool($values[$key])
+            ? $values[$key]
+            : null;
     }
 
     private function nullableString(mixed $value): ?string
