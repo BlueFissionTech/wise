@@ -47,6 +47,16 @@
 - Align with Opus auth patterns and allow injected providers.
 - Add role and permission checks compatible with Opus controllers.
 
+## Phase 8: Provider-Neutral Orchestration Contracts
+- Define a versioned Wise request/outcome envelope.
+- Preserve legacy synchronous orchestration callers.
+- Keep provider status and reason codes distinct from Wise status.
+- Record exact provider source/version, subject scope, lineage, budgets,
+  diagnostics, and unsupported lifecycle features.
+- Prove normal, error, denied, and unsupported outcomes without a provider.
+- Validate optional adapters against exact released upstream contracts before
+  claiming compatibility or production readiness.
+
 ## Full Execution Checklist
 - [ ] Confirm scope and acceptance criteria in SPEC.md.
 - [ ] Inventory current parser behavior with focused tests.
@@ -67,5 +77,8 @@
 - [ ] Emit resource output events (unique output + waiting state) with metadata.
 - [ ] Define ABS2/Holoscene memory adapter interface and shared access plan.
 - [ ] Implement working memory limits and global/user partitions.
-- [ ] Align auth, roles, and permissions with Opus and allow injected providers.
+- [ ] Keep auth, roles, and permissions host-injected and provider-neutral.
+- [x] Define the versioned provider-neutral orchestration envelope.
+- [x] Add provider-free normal, error, denied, and unsupported fixtures.
+- [ ] Add consumer integration evidence after owner-reviewed adapter contracts.
 - [ ] Review regressions and lock behavior in tests.

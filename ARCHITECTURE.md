@@ -54,3 +54,37 @@ scraping terminal text.
 - Register new resources under `src/Wise/Res`.
 - Add or replace interpreters in the kernel wiring.
 - Extend command parsing rules with tests to lock behavior.
+
+## Agent Integration Boundary
+
+Wise hosts intelligence providers behind `IOrchestrator`. The public API stays
+synchronous and provider-neutral. `OrchestrationEnvelope` adds a versioned
+request/outcome contract without replacing the existing
+`OrchestrationRequest` and `OrchestrationOutcome` types.
+
+The envelope separates three concerns:
+
+1. Wise contract and host context: subject, session, lineage, budgets, and
+   lifecycle support.
+2. Provider identity: package source/version plus the exact upstream contract
+   version and adapter-bound features.
+3. Results: the Wise status remains distinct from the provider's original
+   status, code, evidence, and diagnostics.
+
+Injected providers cannot execute commands through this contract.
+`CommandPolicy` remains the host-side authority boundary. Provider confidence,
+ranking, or advice cannot widen permissions. The current lifecycle explicitly
+does not promise cancellation, streaming, resume, automatic effect retries, or
+exactly-once effects.
+
+Execution receipts separately record host-requested termination, confirmed
+stop evidence, and uncertain in-flight work. These receipts do not turn
+provider feature discovery into authority: effect authorization and
+idempotency remain host-owned, and no effect is attributed after a denied or
+confirmed terminal boundary. Missing execution facts remain `null` rather than
+being normalized into negative or empty evidence.
+
+The Automata adapter records the installed `bluefission/automata` version and
+the released `AgentIntegrationContract` version at runtime. It records only
+feature identifiers actually bound by the adapter and does not translate
+generic orchestration outcomes into strategy-routing outcomes.
