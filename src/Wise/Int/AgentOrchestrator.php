@@ -6,7 +6,7 @@ use BlueFission\Arr;
 use BlueFission\Automata\LLM\Agent\Integration\AgentIntegrationContract;
 use BlueFission\Automata\LLM\Agent\AgentSession;
 use BlueFission\Automata\LLM\Agent\Orchestration\OrchestrationConfig;
-use BlueFission\Automata\LLM\Agent\Orchestration\Orchestrator;
+use BlueFission\Automata\LLM\Agent\Orchestration\Orchestrator as AutomataOrchestrator;
 use BlueFission\Automata\LLM\Agent\State\AgentState;
 use BlueFission\DevElation as Dev;
 use BlueFission\Func;
@@ -14,7 +14,7 @@ use BlueFission\Obj;
 use BlueFission\Str;
 use Composer\InstalledVersions;
 
-class AutomataOrchestrator extends Obj implements IOrchestrator
+class AgentOrchestrator extends Obj implements IOrchestrator
 {
     private $factory;
     private bool $enabled;
@@ -22,14 +22,14 @@ class AutomataOrchestrator extends Obj implements IOrchestrator
     public function __construct(?callable $factory = null, bool $enabled = true)
     {
         parent::__construct();
-        $this->factory = $factory ?? static fn (array $config): Orchestrator => new Orchestrator($config);
+        $this->factory = $factory ?? static fn (array $config): AutomataOrchestrator => new AutomataOrchestrator($config);
         $this->enabled = $enabled;
     }
 
     public function available(): bool
     {
         return $this->enabled
-            && class_exists(Orchestrator::class)
+            && class_exists(AutomataOrchestrator::class)
             && class_exists(AgentSession::class)
             && class_exists(AgentState::class)
             && Func::isCallable($this->factory);
@@ -42,7 +42,7 @@ class AutomataOrchestrator extends Obj implements IOrchestrator
         if (!$this->available()) {
             return new OrchestrationOutcome($envelope->outcome([
                 'status' => 'unavailable',
-                'metadata' => ['reason' => 'automata_orchestration_unavailable'],
+                'metadata' => ['reason' => 'orchestration_unavailable'],
             ], [
                 'status' => 'unsupported',
                 'code' => 'provider_unavailable',
@@ -74,7 +74,7 @@ class AutomataOrchestrator extends Obj implements IOrchestrator
                 'context' => $session->context(),
             ],
             'state' => $state->snapshot(),
-            'wise_envelope' => $envelope->request(),
+            'envelope' => $envelope->request(),
         ])->toArray();
         $config = Arr::make($request->config())->merge([
             'pattern' => $request->pattern() ?: OrchestrationConfig::SEQUENTIAL,
@@ -85,10 +85,10 @@ class AutomataOrchestrator extends Obj implements IOrchestrator
 
         try {
             $orchestrator = ($this->factory)($config);
-            if (!($orchestrator instanceof Orchestrator)) {
+            if (!($orchestrator instanceof AutomataOrchestrator)) {
                 return new OrchestrationOutcome($envelope->outcome([
                     'status' => 'failed',
-                    'metadata' => ['reason' => 'invalid_automata_orchestrator'],
+                    'metadata' => ['reason' => 'invalid_orchestrator'],
                 ], [
                     'status' => 'failed',
                     'code' => 'invalid_provider',
@@ -99,7 +99,7 @@ class AutomataOrchestrator extends Obj implements IOrchestrator
             $outcome = new OrchestrationOutcome($envelope->outcome([
                 'status' => 'failed',
                 'metadata' => [
-                    'reason' => 'automata_orchestration_failed',
+                    'reason' => 'orchestration_failed',
                     'exception' => $exception::class,
                 ],
             ], [
@@ -121,9 +121,9 @@ class AutomataOrchestrator extends Obj implements IOrchestrator
         $outcome = new OrchestrationOutcome($envelope->outcome($hostResult, [
             'status' => $data['status'] ?? null,
             'code' => $data['code'] ?? ($data['reason_code'] ?? null),
-            'evidence' => is_array($data['evidence'] ?? null) ? $data['evidence'] : [],
-            'metadata' => is_array($data['metadata'] ?? null) ? $data['metadata'] : [],
-        ], is_array($data['diagnostics'] ?? null) ? $data['diagnostics'] : []));
+            'evidence' => Arr::is($data['evidence'] ?? null) ? $data['evidence'] : [],
+            'metadata' => Arr::is($data['metadata'] ?? null) ? $data['metadata'] : [],
+        ], Arr::is($data['diagnostics'] ?? null) ? $data['diagnostics'] : []));
         Dev::do('wise.int.orchestration.after', [$outcome]);
 
         return $outcome;
@@ -138,7 +138,7 @@ class AutomataOrchestrator extends Obj implements IOrchestrator
         }
 
         $contract = [
-            'name' => 'automata.agent.integration',
+            'name' => 'wise.agent.integration',
             'version' => null,
             'features' => [],
         ];

@@ -117,7 +117,7 @@ class OrchestrationRequest extends Obj
             return null;
         }
 
-        $value = trim((string)$value);
+        $value = Str::trim((string)$value);
 
         return $value !== '' ? $value : null;
     }

@@ -2,7 +2,7 @@
 
 namespace BlueFission\Tests;
 
-use BlueFission\Wise\Int\AutomataOrchestrator;
+use BlueFission\Wise\Int\AgentOrchestrator;
 use BlueFission\Wise\Int\NullOrchestrator;
 use BlueFission\Wise\Int\OrchestrationEnvelope;
 use BlueFission\Wise\Int\OrchestrationOutcome;
@@ -12,7 +12,7 @@ use BlueFission\Wise\Usr\Profile;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
-final class AutomataOrchestratorTest extends TestCase
+final class AgentOrchestratorTest extends TestCase
 {
     public function testPersonaContextNormalizesProfileData(): void
     {
@@ -38,12 +38,12 @@ final class AutomataOrchestratorTest extends TestCase
 
         $this->assertFalse($orchestrator->available());
         $this->assertSame('unavailable', $outcome->status());
-        $this->assertSame('automata_orchestration_unavailable', $outcome->metadata()['reason']);
+        $this->assertSame('orchestration_unavailable', $outcome->metadata()['reason']);
     }
 
     public function testAutomataSequentialOrchestrationReturnsStructuredState(): void
     {
-        $orchestrator = new AutomataOrchestrator();
+        $orchestrator = new AgentOrchestrator();
         $request = new OrchestrationRequest(
             'prepare and verify a change',
             new Profile('agent-1', ['operator']),
@@ -51,7 +51,7 @@ final class AutomataOrchestratorTest extends TestCase
                 'plan' => static fn (array $context): array => [
                     'output' => [
                         'steps' => ['inspect', 'change', 'verify'],
-                        'contract_version' => $context['wise_envelope']['contract']['version'] ?? null,
+                        'contract_version' => $context['envelope']['contract']['version'] ?? null,
                     ],
                     'confidence' => 0.9,
                 ],
@@ -83,6 +83,7 @@ final class AutomataOrchestratorTest extends TestCase
         $this->assertSame('prepare and verify a change', $outcome->state()['channels']['observations']['task']);
         $this->assertSame('agent-1', $outcome->state()['channels']['rules']['persona']['id']);
         $this->assertSame('automata', $outcome->provider()['name']);
+        $this->assertSame('wise.agent.integration', $outcome->provider()['contract']['name']);
         $this->assertSame('1.5.0', $outcome->provider()['contract']['version']);
         $this->assertSame('completed', $outcome->providerResult()['status']);
         $this->assertSame('unsupported', $outcome->lifecycle()['cancellation']);
@@ -90,7 +91,7 @@ final class AutomataOrchestratorTest extends TestCase
 
     public function testAutomataOrchestrationCanBeDisabled(): void
     {
-        $orchestrator = new AutomataOrchestrator(enabled: false);
+        $orchestrator = new AgentOrchestrator(enabled: false);
 
         $outcome = $orchestrator->orchestrate(new OrchestrationRequest('task', new Profile('agent-1')));
 
@@ -100,7 +101,7 @@ final class AutomataOrchestratorTest extends TestCase
 
     public function testAutomataFactoryFailuresAreNormalized(): void
     {
-        $orchestrator = new AutomataOrchestrator(
+        $orchestrator = new AgentOrchestrator(
             static function (array $config): object {
                 throw new \RuntimeException('runtime details');
             }
@@ -109,7 +110,7 @@ final class AutomataOrchestratorTest extends TestCase
         $outcome = $orchestrator->orchestrate(new OrchestrationRequest('task', new Profile('agent-1')));
 
         $this->assertSame('failed', $outcome->status());
-        $this->assertSame('automata_orchestration_failed', $outcome->metadata()['reason']);
+        $this->assertSame('orchestration_failed', $outcome->metadata()['reason']);
         $this->assertSame(\RuntimeException::class, $outcome->metadata()['exception']);
         $this->assertSame('provider_exception', $outcome->providerResult()['code']);
         $this->assertSame('provider_exception', $outcome->diagnostics()[0]['code']);
@@ -118,12 +119,12 @@ final class AutomataOrchestratorTest extends TestCase
 
     public function testAutomataFactoryMustReturnReleasedOrchestrator(): void
     {
-        $orchestrator = new AutomataOrchestrator(static fn (array $config): object => new \stdClass());
+        $orchestrator = new AgentOrchestrator(static fn (array $config): object => new \stdClass());
 
         $outcome = $orchestrator->orchestrate(new OrchestrationRequest('task', new Profile('agent-1')));
 
         $this->assertSame('failed', $outcome->status());
-        $this->assertSame('invalid_automata_orchestrator', $outcome->metadata()['reason']);
+        $this->assertSame('invalid_orchestrator', $outcome->metadata()['reason']);
     }
 
     #[DataProvider('providerFreeOutcomeFixtures')]

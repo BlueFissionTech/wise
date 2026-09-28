@@ -35,29 +35,34 @@ class OrchestrationOutcome extends Obj
         $this->status = Str::make((string)($data['status'] ?? 'failed'));
         $this->pattern = Str::make((string)($data['pattern'] ?? ''));
         $this->output = $data['output'] ?? null;
-        $this->workerResults = Arr::make(Arr::is($data['worker_results'] ?? null) ? $data['worker_results'] : []);
-        $this->conflicts = Arr::make(Arr::is($data['conflicts'] ?? null) ? $data['conflicts'] : []);
+        $this->workerResults = self::collection($data['worker_results'] ?? null);
+        $this->conflicts = self::collection($data['conflicts'] ?? null);
         $this->confidence = Val::is($data['confidence'] ?? null) ? (float)$data['confidence'] : null;
-        $this->metadata = Arr::make(Arr::is($data['metadata'] ?? null) ? $data['metadata'] : []);
-        $this->persona = Arr::make(Arr::is($data['persona'] ?? null) ? $data['persona'] : []);
+        $this->metadata = self::collection($data['metadata'] ?? null);
+        $this->persona = self::collection($data['persona'] ?? null);
         $this->sessionId = Str::make((string)($data['session_id'] ?? ''));
-        $this->state = Arr::make(Arr::is($data['state'] ?? null) ? $data['state'] : []);
-        $this->contract = Arr::make(Arr::is($data['contract'] ?? null) ? $data['contract'] : []);
-        $this->provider = Arr::make(Arr::is($data['provider'] ?? null) ? $data['provider'] : []);
-        $this->providerResult = Arr::make(Arr::is($data['provider_result'] ?? null) ? $data['provider_result'] : []);
-        $this->subject = Arr::make(Arr::is($data['subject'] ?? null) ? $data['subject'] : []);
-        $this->lineage = Arr::make(Arr::is($data['lineage'] ?? null) ? $data['lineage'] : []);
-        $this->budgets = Arr::make(Arr::is($data['budgets'] ?? null) ? $data['budgets'] : []);
-        $this->lifecycle = Arr::make(Arr::is($data['lifecycle'] ?? null) ? $data['lifecycle'] : []);
-        $this->execution = Arr::make(Arr::is($data['execution'] ?? null) ? $data['execution'] : []);
-        $this->diagnostics = Arr::make(Arr::is($data['diagnostics'] ?? null) ? $data['diagnostics'] : []);
+        $this->state = self::collection($data['state'] ?? null);
+        $this->contract = self::collection($data['contract'] ?? null);
+        $this->provider = self::collection($data['provider'] ?? null);
+        $this->providerResult = self::collection($data['provider_result'] ?? null);
+        $this->subject = self::collection($data['subject'] ?? null);
+        $this->lineage = self::collection($data['lineage'] ?? null);
+        $this->budgets = self::collection($data['budgets'] ?? null);
+        $this->lifecycle = self::collection($data['lifecycle'] ?? null);
+        $this->execution = self::collection($data['execution'] ?? null);
+        $this->diagnostics = self::collection($data['diagnostics'] ?? null);
+    }
+
+    private static function collection(mixed $value): Arr
+    {
+        return Arr::is($value) ? Arr::make($value) : Arr::make();
     }
 
     public static function unavailable(): self
     {
         return new self([
             'status' => 'unavailable',
-            'metadata' => ['reason' => 'automata_orchestration_unavailable'],
+            'metadata' => ['reason' => 'orchestration_unavailable'],
         ]);
     }
 

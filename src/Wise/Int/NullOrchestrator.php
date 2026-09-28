@@ -17,7 +17,7 @@ class NullOrchestrator extends Obj implements IOrchestrator
 
         return new OrchestrationOutcome($envelope->outcome([
             'status' => 'unavailable',
-            'metadata' => ['reason' => 'automata_orchestration_unavailable'],
+            'metadata' => ['reason' => 'orchestration_unavailable'],
         ], [
             'status' => 'unsupported',
             'code' => 'provider_unavailable',

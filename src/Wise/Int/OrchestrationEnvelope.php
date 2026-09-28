@@ -2,7 +2,10 @@
 
 namespace BlueFission\Wise\Int;
 
+use BlueFission\Arr;
+use BlueFission\Flag;
 use BlueFission\Obj;
+use BlueFission\Str;
 
 final class OrchestrationEnvelope extends Obj
 {
@@ -63,7 +66,10 @@ final class OrchestrationEnvelope extends Obj
             'request' => [
                 'task' => $this->request->task(),
                 'pattern' => $this->request->pattern(),
-                'worker_ids' => array_map('strval', array_keys($this->request->workers())),
+                'worker_ids' => Arr::make($this->request->workers())
+                    ->keys()
+                    ->map(static fn ($workerId): string => (string)$workerId)
+                    ->toArray(),
                 'context' => $this->request->context(),
                 'capability_scope' => $this->request->capabilities(),
                 'state' => $this->request->state(),
@@ -78,12 +84,12 @@ final class OrchestrationEnvelope extends Obj
         array $diagnostics = []
     ): array {
         $persona = $this->request->persona()->toArray();
-        $execution = is_array($hostResult['execution'] ?? null)
+        $execution = Arr::is($hostResult['execution'] ?? null)
             ? $hostResult['execution']
             : [];
         unset($hostResult['execution']);
 
-        return array_merge($hostResult, [
+        return Arr::merge($hostResult, [
             'contract' => $this->contract(),
             'provider' => $this->provider(),
             'provider_result' => $this->normalizeProviderResult($providerResult),
@@ -96,13 +102,13 @@ final class OrchestrationEnvelope extends Obj
             'budgets' => $this->request->budgets(),
             'lifecycle' => $this->lifecycle(),
             'execution' => $this->normalizeExecution($execution),
-            'diagnostics' => array_values($diagnostics),
+            'diagnostics' => Arr::values($diagnostics),
         ]);
     }
 
     private function normalizeProvider(array $provider): array
     {
-        $contract = is_array($provider['contract'] ?? null)
+        $contract = Arr::is($provider['contract'] ?? null)
             ? $provider['contract']
             : [];
 
@@ -113,8 +119,8 @@ final class OrchestrationEnvelope extends Obj
             'contract' => [
                 'name' => $this->nullableString($contract['name'] ?? null),
                 'version' => $this->nullableString($contract['version'] ?? null),
-                'features' => is_array($contract['features'] ?? null)
-                    ? array_values($contract['features'])
+                'features' => Arr::is($contract['features'] ?? null)
+                    ? Arr::values($contract['features'])
                     : [],
             ],
         ];
@@ -125,20 +131,20 @@ final class OrchestrationEnvelope extends Obj
         return [
             'status' => $this->nullableString($result['status'] ?? null),
             'code' => $this->nullableString($result['code'] ?? null),
-            'evidence' => is_array($result['evidence'] ?? null) ? $result['evidence'] : [],
-            'metadata' => is_array($result['metadata'] ?? null) ? $result['metadata'] : [],
+            'evidence' => Arr::is($result['evidence'] ?? null) ? $result['evidence'] : [],
+            'metadata' => Arr::is($result['metadata'] ?? null) ? $result['metadata'] : [],
         ];
     }
 
     private function normalizeExecution(array $execution): array
     {
-        $termination = is_array($execution['termination'] ?? null)
+        $termination = Arr::is($execution['termination'] ?? null)
             ? $execution['termination']
             : [];
-        $evidence = is_array($execution['evidence'] ?? null)
+        $evidence = Arr::is($execution['evidence'] ?? null)
             ? $execution['evidence']
             : [];
-        $effects = is_array($execution['effects'] ?? null)
+        $effects = Arr::is($execution['effects'] ?? null)
             ? $execution['effects']
             : [];
 
@@ -151,18 +157,18 @@ final class OrchestrationEnvelope extends Obj
                 'mechanism' => $this->nullableString($termination['mechanism'] ?? null),
             ],
             'evidence' => [
-                'in_flight' => is_array($evidence['in_flight'] ?? null)
-                    ? array_values($evidence['in_flight'])
+                'in_flight' => Arr::is($evidence['in_flight'] ?? null)
+                    ? Arr::values($evidence['in_flight'])
                     : null,
-                'uncertain' => is_array($evidence['uncertain'] ?? null)
-                    ? array_values($evidence['uncertain'])
+                'uncertain' => Arr::is($evidence['uncertain'] ?? null)
+                    ? Arr::values($evidence['uncertain'])
                     : null,
             ],
             'effects' => [
                 'authorization_owner' => 'host',
                 'idempotency_owner' => 'host',
-                'attributed_after_terminal' => is_array($effects['attributed_after_terminal'] ?? null)
-                    ? array_values($effects['attributed_after_terminal'])
+                'attributed_after_terminal' => Arr::is($effects['attributed_after_terminal'] ?? null)
+                    ? Arr::values($effects['attributed_after_terminal'])
                     : null,
             ],
         ];
@@ -170,7 +176,7 @@ final class OrchestrationEnvelope extends Obj
 
     private function nullableBool(array $values, string $key): ?bool
     {
-        return array_key_exists($key, $values) && is_bool($values[$key])
+        return Arr::hasKey($values, $key) && Flag::isBool($values[$key])
             ? $values[$key]
             : null;
     }
@@ -181,7 +187,7 @@ final class OrchestrationEnvelope extends Obj
             return null;
         }
 
-        $value = trim((string)$value);
+        $value = Str::trim((string)$value);
 
         return $value !== '' ? $value : null;
     }
